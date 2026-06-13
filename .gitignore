@@ -1,0 +1,36 @@
+# --- Python / backend ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+
+# Vite build output served by FastAPI — generated at build/deploy time,
+# never hand-edited, so it should not be tracked.
+backend/static/*
+!backend/static/.gitkeep
+
+# --- Secrets ---
+.env
+backend/.env
+frontend/.env
+
+# --- Model weights (large binary — distribute via Releases instead) ---
+*.pth
+weights/*
+!weights/.gitkeep
+backend/weights/*
+!backend/weights/.gitkeep
+
+# --- Runtime data ---
+audit_log.db
+backend/data/*
+!backend/data/.gitkeep
+
+# --- OS / IDE ---
+.DS_Store
+.vscode/

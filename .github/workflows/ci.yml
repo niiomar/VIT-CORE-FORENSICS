@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps for OpenCV
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-0 libsm6 libxext6 libxrender1 libgl1
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Compile check
+        run: python -m py_compile main.py model.py auth.py audit.py
+
+      - name: Smoke test (CPU, untrained weights)
+        run: python -m pytest tests/ -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm install
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_KEY: ci-placeholder-key

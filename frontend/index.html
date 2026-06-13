@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ViT-CORE — Deepfake Detection Workspace</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="brand">
+      <svg width="32" height="32" viewBox="0 0 40 40" fill="none"><rect x="1" y="1" width="38" height="38" rx="8" stroke="#30363d"/><circle cx="20" cy="20" r="8" stroke="#2f81f7" stroke-width="2"/><circle cx="20" cy="20" r="2" fill="#fff"/></svg>
+      <div><h1>ViT-CORE</h1><p>Forensic Workspace</p></div>
+    </div>
+    <div class="session-stats">
+      <div class="stat-box"><span>Scans</span><strong id="stat-total">0</strong></div>
+      <div class="stat-box"><span>Real</span><strong id="stat-real-count" class="stat-real">0</strong></div>
+      <div class="stat-box"><span>Fake</span><strong id="stat-fake-count" class="stat-fake">0</strong></div>
+    </div>
+    <div id="drop-zone">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <h2>Load Evidence File</h2>
+      <p>JPG, PNG, MP4, AVI, MOV</p>
+    </div>
+    <input type="file" id="file-input" accept="image/*,video/*" />
+    <div class="explain-toggle-container">
+      <input type="checkbox" id="explain-toggle" checked />
+      <label for="explain-toggle">ATTENTION ROLLOUT (TTA HEATMAP)</label>
+    </div>
+    <button id="analyze-btn" class="action-btn" disabled>RUN ANALYSIS</button>
+    <div class="history-header">
+      <span>Session History</span>
+      <button id="clear-history-btn" class="clear-history">CLEAR</button>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </div>
+
+  <div class="main-view">
+    <div id="idle-state"><div class="idle-eye"></div><p>AWAITING TELEMETRY</p></div>
+    <div id="result-state">
+      <div id="low-conf-warning" class="warning-banner">⚠ <strong>Low Confidence Result:</strong> The media contains ambiguous features. Manual review recommended.</div>
+      <div id="low-qual-warning" class="warning-banner">⚠ <strong>Low Quality Media:</strong> The detected face is blurry or poorly lit. Accuracy may be reduced.</div>
+      <div class="top-stats">
+        <div class="gauge-container">
+          <svg class="gauge-svg" viewBox="0 0 160 160">
+            <circle class="gauge-bg" cx="80" cy="80" r="70"/><circle id="gauge-fill" class="gauge-fill" cx="80" cy="80" r="70"/>
+          </svg>
+          <div class="gauge-text"><div id="gauge-verdict" class="verdict">—</div><div class="conf"><span id="gauge-conf">0</span>% CONF</div></div>
+        </div>
+        <div class="workspace-panels">
+          <div id="preview-wrapper" class="preview-container">
+            <div class="panel-title">EVIDENCE TELEMETRY</div>
+            <img id="preview-img" style="display:none;" />
+            <video id="video-preview" muted playsinline loop style="display:none;"></video>
+            <div class="scan-line"></div>
+          </div>
+          <div id="heatmap-wrapper" class="preview-container">
+            <div class="panel-title">ATTENTION ROLLOUT (ViT)</div>
+            <img id="heatmap-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+            <div class="scan-line"></div>
+          </div>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mc-label">Analysis Time</div><div id="stat-time" class="mc-val">—</div></div>
+        <div class="metric-card"><div class="mc-label">Face Det. Status</div><div id="stat-face" class="mc-val">—</div></div>
+        <div class="metric-card"><div class="mc-label">Face Quality</div><div id="stat-quality" class="mc-val">—</div></div>
+        <div class="metric-card"><div class="mc-label">Media Format</div><div id="stat-type" class="mc-val">—</div></div>
+        <div class="metric-card"><div class="mc-label">Agg. Score (0-1)</div><div id="stat-score" class="mc-val">—</div></div>
+        <div class="metric-card"><div class="mc-label">Frames Evaluated</div><div id="stat-frames" class="mc-val">—</div></div>
+      </div>
+      <div class="btn-row"><button id="export-btn" class="secondary-btn">EXPORT FORENSIC REPORT (.PDF)</button></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/app.js"></script>
+</body>
+</html>
