@@ -8,6 +8,7 @@ torch>=2.0.0
 torchvision>=0.15.0
 timm>=0.9.0
 facenet-pytorch>=2.5.3
+pytest>=7.0.0
 
 # Image & Video Processing
 Pillow>=10.0.0
