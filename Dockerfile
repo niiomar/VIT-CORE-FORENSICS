@@ -1,4 +1,4 @@
-# ── Stage 1: build the frontend ────────────────────────────────────────────
+# Stage 1: build the frontend
 FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
@@ -11,7 +11,7 @@ ARG VITE_API_KEY
 ENV VITE_API_KEY=${VITE_API_KEY}
 RUN npm run build
 
-# ── Stage 2: backend runtime ────────────────────────────────────────────────
+# Stage 2: backend runtime
 FROM python:3.11-slim AS runtime
 
 # OpenCV needs these system libs
