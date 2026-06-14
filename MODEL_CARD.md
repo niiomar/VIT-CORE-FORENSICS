@@ -1,67 +1,104 @@
 # Model Card — ViT-CORE (vitcore_best.pth)
 
-> ⚠️ **TODO**: The benchmark figures below are placeholders. The attached
-> `ViT-CORE_Framework.pptx` contained only a title slide with no results data,
-> so these numbers must be filled in from your actual training/evaluation logs
-> before this card is published. Do not ship this card with placeholder
-> numbers — an unfilled model card is worse than none, since it implies
-> figures that were never measured.
-
 ## Overview
 
-ViT-CORE is a Vision Transformer (`vit_small_patch16_224`) fine-tuned for
-binary real/fake classification of face images, used as the core classifier
-in the ViT-CORE-FORENSICS deepfake detection pipeline.
+ViT-CORE is a Vision Transformer (ViT-S/16) deepfake detector that combines dual-view consistency learning with transformer-based global context modeling. The model is trained on FaceForensics++ (Low Quality / c40) and evaluated on both in-domain and cross-domain benchmarks.
 
-- **Architecture:** ViT-Small, patch size 16, input 224×224
-- **Output:** 2-class softmax (index 0 = real, index 1 = fake)
-- **Face extraction:** MTCNN (facenet-pytorch), margin=20px
-- **Inference augmentation:** 4-view TTA (original, h-flip, center-crop+resize, h-flip of crop)
+- **Architecture:** ViT-Small (ViT-S/16), 12 transformer layers, 384-dimensional embeddings
+- **Input Resolution:** 224 × 224
+- **Output:** Binary classification (Real vs Fake)
+- **Face Detection:** MTCNN with 1.3× bounding-box expansion
+- **Consistency Learning:** Dual-view augmentation with Mean Squared Error (MSE) consistency loss
+- **Pretraining:** ImageNet-1K pretrained weights
+- **Training Epochs:** 30
+- **Optimizer:** Adam (lr = 1e-4)
 
 ## Training Data
 
-> TODO — fill in:
-> - Dataset(s) used (e.g. FaceForensics++, CelebDF, DFDC, custom)
-> - Compression levels used (c0/c23/c40 for FF++)
-> - Train/val/test split sizes and methodology (split by identity, not by clip)
-> - Class balance
+### Training Dataset
+- **FaceForensics++ (Low Quality / c40)**
+  - 1,000 real videos
+  - 4,000 manipulated videos
+  - Manipulation methods: Deepfakes, Face2Face, FaceSwap, NeuralTextures
+  - Heavy compression setting (c40)
+
+### Evaluation Datasets
+- FaceForensics++ (LQ) Test Set
+- Celeb-DF
+- DFDC-Preview
+- WildDeepfake
+
+### Preprocessing
+- Face extraction using MTCNN
+- Bounding boxes enlarged by 1.3× to preserve facial context
+- Faces resized to 224 × 224
+- Image normalization using ImageNet statistics
+- Weighted random sampling for class balancing
+
+### Augmentation Strategy
+Two independent views are generated for each image:
+
+1. **RaAug**
+   - No augmentation
+   - Random erasing
+   - Random resized crop
+
+2. **DFDC_Selim**
+   - JPEG compression
+   - Gaussian noise
+   - Gaussian blur
+   - Random affine transformations
+   - Random resized crop
 
 ## Benchmark Results
 
-> TODO — fill in actual numbers from evaluate.py / metrics.py output.
+### In-Domain Evaluation
 
-| Test Set | Accuracy | AUC | Precision | Recall | F1 |
-|---|---|---|---|---|---|
-| FaceForensics++ (c23) | TBD | TBD | TBD | TBD | TBD |
-| CelebDF-v2 | TBD | TBD | TBD | TBD | TBD |
-| DFDC | TBD | TBD | TBD | TBD | TBD |
+| Dataset | AUC (%) | Accuracy (%) |
+|----------|----------|----------|
+| FaceForensics++ (LQ) | 96.84 | 90.62 |
+
+### Cross-Domain Evaluation
+
+| Dataset | AUC (%) |
+|----------|----------|
+| Celeb-DF | 80.04 |
+| DFDC-Preview | 76.37 |
+| WildDeepfake | 75.01 |
+
+### Comparison Against CORE Baseline
+
+| Dataset | CORE AUC (%) | ViT-CORE AUC (%) |
+|----------|----------|----------|
+| FaceForensics++ (LQ) | 90.61 | 96.84 |
+| Celeb-DF | 79.45 | 80.04 |
+| DFDC-Preview | 75.74 | 76.37 |
+
+## Training Configuration
+
+- Batch Size: 32
+- Learning Rate: 1 × 10⁻⁴
+- Optimizer: Adam (β1=0.9, β2=0.999)
+- Consistency Weight (Training): α = 5
+- Consistency Weight (Cross-Domain Evaluation): α = 50–100
+- Checkpoint Selection: Highest validation AUC
 
 ## Known Limitations
 
-- Face quality assessment thresholds (Laplacian variance, brightness) are
-  calibrated heuristics, not learned from a dataset — they flag obviously
-  poor inputs but are not a substitute for image-quality-aware training.
-- The model has only been evaluated on the datasets listed above. Performance
-  on manipulation methods or generators not represented in training data
-  (e.g. newer diffusion-based face swaps) is unknown and likely degraded.
-- Single-face detection only (`keep_all=False`) — videos with multiple faces
-  are analyzed using only one face per frame, chosen by MTCNN's default
-  selection (highest detection confidence).
-- TTA and confidence-weighted frame aggregation reduce variance but do not
-  eliminate it; `is_low_confidence` (0.4–0.6 probability range) should be
-  treated as "no reliable verdict," not as a soft real/fake call.
+- Performance decreases under significant domain shift, from 96.84% AUC in-domain to approximately 75–80% AUC on unseen datasets.
+- The framework operates on single frames and does not leverage temporal information available in videos.
+- Performance on datasets and manipulation techniques outside the evaluation benchmark remains unknown.
+- Strong real-world robustness against emerging diffusion-based face manipulation methods has not yet been established.
+- The system analyzes facial content only and may be affected by face detection failures or extreme image degradation.
 
 ## Intended Use
 
-This system is designed as a **screening aid** for forensic analysts, not as
-a standalone source of truth. Outputs should be corroborated with other
-evidence before being used in any investigative or legal context. See
-`explanation_summary.disclaimer` in API responses for the exact language
-surfaced to end users.
+This system is intended as a forensic screening and research tool for detecting manipulated facial imagery. Predictions should be treated as decision-support signals rather than definitive proof of authenticity or manipulation.
+
+Human review and corroborating evidence are recommended before use in investigative, legal, journalistic, or security-sensitive contexts.
 
 ## Versioning
 
 | Version | Date | Notes |
-|---|---|---|
-| 2.0.0 | TBD | Current — attention rollout explainability, audit logging, batch endpoint |
-| 1.0.0 | TBD | Initial FastAPI deployment |
+|----------|----------|----------|
+| 2.0.0 | 2026 | ViT-S/16 backbone, MSE consistency regularization, cross-domain evaluation on Celeb-DF, DFDC-Preview, and WildDeepfake |
