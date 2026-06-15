@@ -91,7 +91,6 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
     return frames
 
 # Core analysis (shared by single + batch endpoints)
-
 async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
     start_time = time.time()
     filename_lower = (file.filename or "").lower()
