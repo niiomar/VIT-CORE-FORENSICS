@@ -1,6 +1,6 @@
 # ViT-CORE-FORENSICS
 
-**A deepfake detection workspace** built on a Dual-View Vision Transformer framework, delivering probabilistic, explainable assessments of media manipulation with full chain-of-custody audit logging.
+**A full-stack deepfake forensic analysis platform** built on a Dual-View Vision Transformer framework, delivering probabilistic, explainable assessments of media manipulation with forensic audit logging.
 
 [![CI](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml/badge.svg)](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -28,9 +28,9 @@
 
 ## Overview
 
-ViT-CORE-FORENSICS is the production-deployment layer built on top of the [ViT-CORE](https://github.com/niiomar/ViT-CORE) training pipeline (an MSc Computer Science research project). It packages a Vision Transformer-based deepfake classifier into a full-stack forensic workspace: a FastAPI backend handling inference, attention-based explainability, audit logging, and rate limiting; and a Vite-built frontend providing an analyst-facing UI with session history and PDF report export.
+ViT-CORE-FORENSICS is the production-deployment layer built on top of the [ViT-CORE](https://github.com/niiomar/ViT-CORE) training pipeline — an MSc Computer Science research project. It packages a Vision Transformer-based deepfake classifier into a full-stack forensic workspace: a FastAPI backend handling inference, attention-based explainability, audit logging, and rate limiting; and a Vite-built frontend providing an analyst-facing UI with session history and PDF report export.
 
-The system is designed as a **screening aid for forensic analysts** — outputs are probabilistic, not verdicts, and are intended to support (not replace) human investigation.
+The system is designed as a **screening aid for forensic analysts**. Outputs are probabilistic assessments, not definitive verdicts, and are intended to support — not replace — human investigation.
 
 ---
 
@@ -45,10 +45,10 @@ The classifier departs from standard CNN-based detection by using a self-attenti
 3. **Feature Embedding** — The resulting representations (`f1`, `f2`) are L2-normalized into embedding vectors (`f̃1`, `f̃2`).
 4. **Consistency Constraint** — A Mean Squared Error consistency loss (`L_cons`) aligns the two embeddings before they are passed to a shared classification head.
 
-### Inference Pipeline (this repository)
+### Inference Pipeline
 
 ```
-Upload → MTCNN face extraction → Face quality assessment
+Upload → MTCNN face extraction → Face quality assessment (3-tier: Poor / Fair / High)
        → 4-view Test-Time Augmentation (orig / h-flip / center-crop / crop+flip)
        → ViT-S/16 forward pass → Confidence-weighted aggregation across frames
        → Attention Rollout heatmap (optional) → Audit log entry → JSON response
@@ -58,13 +58,13 @@ Upload → MTCNN face extraction → Face quality assessment
 
 ## Key Features
 
-- **Attention Rollout Heatmaps** — Native QKV hooks on the final transformer block reconstruct the self-attention matrix directly (bypassing PyTorch's fused SDPA path, which breaks naive gradient-based hooks), producing a spatial map of which facial regions drove the verdict.
-- **Conservative Frame Aggregation** — For video input, the reported face-quality metric is anchored to the *worst* quality observed across all sampled frames, not the first — a single blurry frame degrades the reported confidence for the whole clip.
-- **Confidence-Weighted Logits** — Per-frame probabilities are aggregated with weights proportional to `|p - 0.5|`, so high-certainty frames dominate the final score and near-ambiguous frames are effectively discounted.
-- **Forensic Audit Log** — Every analysis is recorded in an append-only SQLite log keyed by the SHA-256 hash of the input file, alongside verdict, confidence, model version, and timestamp — enabling "has this exact file been analysed before" lookups.
-- **Batch Analysis** — `/api/v1/analyze/batch` accepts up to 50 files in a single request for evidence-set screening, with per-file error isolation.
+- **Attention Rollout Heatmaps** — Native QKV hooks on the final transformer block reconstruct the self-attention matrix directly, bypassing PyTorch's fused SDPA path which breaks naive gradient-based hooks. Produces a spatial map of which facial regions drove the classification.
+- **Conservative Frame Aggregation** — For video input, the reported face-quality metric is anchored to the *worst* quality observed across all sampled frames — a single blurry frame degrades the reported confidence for the whole clip.
+- **Confidence-Weighted Logits** — Per-frame probabilities are aggregated with weights proportional to `|p - 0.5|`, so high-certainty frames dominate the final score and near-ambiguous frames are discounted.
+- **Forensic Audit Log** — Every analysis is recorded in an append-only SQLite log keyed by the SHA-256 hash of the input file, alongside verdict, confidence, model version, and timestamp — supporting "has this exact file been analysed before" lookups.
+- **Batch Analysis** — `/api/v1/analyze/batch` accepts up to 50 files per request for evidence-set screening, with per-file error isolation.
 - **Sliding-Window Rate Limiting** — Native request throttling protects inference compute from automated abuse.
-- **PDF Report Export** — One-click forensic report generation (verdict, confidence, heatmap, explanation) via `jsPDF`.
+- **PDF Report Export** — One-click forensic report generation (verdict, confidence, heatmap) via `jsPDF`.
 
 ---
 
@@ -78,31 +78,31 @@ ViT-CORE-FORENSICS/
 │   ├── auth.py              # API key dependency (optional, env-gated)
 │   ├── audit.py             # SQLite forensic audit log
 │   ├── requirements.txt     # Python dependencies (NumPy < 2.0 locked)
-│   ├── .env.example         # Backend config template
-│   ├── weights/              # vitcore_best.pth goes here (download from Releases)
-│   ├── static/               # Vite build output — generated, not tracked in git
+│   ├── .env.example         # Backend config template — copy to .env
+│   ├── weights/             # Place vitcore_best.pth here (download from Releases)
+│   ├── static/              # Vite build output — generated, not tracked in git
 │   └── tests/
 │       └── test_smoke.py    # CPU smoke test for CI
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── app.js            # Entry point — UI logic, fetch calls, state
+│   │   ├── app.js           # Entry point — UI logic, fetch calls, state
 │   │   ├── styles.css
-│   │   └── ...                # Modular components
+│   │   └── utils/           # api.js, report.js
 │   ├── index.html
-│   ├── .env.example          # Frontend config template (API key for dev builds)
+│   ├── .env.example         # Frontend config template — copy to .env
 │   ├── package.json
-│   └── vite.config.js        # Build output → ../backend/static
+│   └── vite.config.js       # Build output → ../backend/static
 │
-├── .github/workflows/ci.yml  # Lint, compile-check, smoke test, frontend build
+├── .github/workflows/ci.yml  # Compile-check, smoke test, frontend build
 ├── .gitignore
-├── Dockerfile                 # Multi-stage: Vite build → Python runtime
+├── CONTRIBUTING.md
+├── Dockerfile                # Multi-stage: Vite build → Python runtime
 ├── docker-compose.yml
-├── MODEL_CARD.md              # Training data, benchmarks, known limitations
+├── MODEL_CARD.md             # Training data, benchmarks, known limitations
+├── SECURITY.md
 └── LICENSE
 ```
-
-> **Note on `static/`:** unlike earlier versions of this project, the Vite build output is **not** committed to git — it's a build artifact regenerated by `npm run build`. See [`.gitignore`](#configuration).
 
 ---
 
@@ -114,17 +114,21 @@ ViT-CORE-FORENSICS/
 - Node.js 18+
 - 8GB+ RAM (CUDA-enabled GPU recommended; CPU inference works but is slower)
 
-### 1. Clone and set up the backend
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/niiomar/VIT-CORE-FORENSICS.git
-cd VIT-CORE-FORENSICS/backend
+cd VIT-CORE-FORENSICS
+```
 
+### 2. Set up the backend
+
+```bash
+cd backend
 python -m venv venv
 
 # Windows
 venv\Scripts\activate
-
 # macOS / Linux
 source venv/bin/activate
 
@@ -132,7 +136,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. Download model weights
+### 3. Download model weights
 
 The trained checkpoint exceeds GitHub's file size limits and is distributed via Releases:
 
@@ -140,31 +144,33 @@ The trained checkpoint exceeds GitHub's file size limits and is distributed via 
 2. Download `vitcore_best.pth`.
 3. Place it at `backend/weights/vitcore_best.pth`.
 
-### 3. Configure environment variables
+### 4. Configure environment variables
 
 ```bash
-cd backend
+# from backend/
 cp .env.example .env
+# Edit .env — set MODEL_WEIGHTS_PATH=weights/vitcore_best.pth and API_KEY
+
+# from frontend/
+cd ../frontend
+cp .env.example .env
+# Set VITE_API_KEY to match backend/.env API_KEY
 ```
 
-Edit `backend/.env` — at minimum confirm `MODEL_WEIGHTS_PATH=weights/vitcore_best.pth`. See [Configuration](#configuration) for all options.
-
-### 4. Build the frontend
+### 5. Build the frontend
 
 ```bash
-cd ../frontend
-cp .env.example .env   # set VITE_API_KEY to match backend/.env if auth is enabled
+# from frontend/
 npm install
 npm run build
-cd ..
 ```
 
 This compiles the Vite project into `backend/static/`, which FastAPI serves directly.
 
-### 5. Run the server
+### 6. Run the server
 
 ```bash
-cd backend
+cd ../backend
 uvicorn main:app --reload
 ```
 
@@ -174,37 +180,38 @@ Open **http://localhost:8000**.
 
 ## Configuration
 
-All configuration is via environment variables, loaded from `.env` files (never committed — see `.gitignore`).
+All configuration is via environment variables loaded from `.env` files. These are never committed — see `.gitignore`.
 
 ### `backend/.env`
 
 | Variable | Default | Description |
 |---|---|---|
-| `API_KEY` | *(unset)* | Shared secret for `X-API-KEY` header auth. If unset, the API is **unauthenticated** — fine for local dev, **not** for any exposed deployment. |
-| `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated list of allowed frontend origins. |
+| `API_KEY` | *(unset)* | Shared secret for `X-API-KEY` header auth. If unset, the API is unauthenticated — acceptable for local use, not for any exposed deployment. |
+| `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated allowed frontend origins. |
 | `MODEL_WEIGHTS_PATH` | `vitcore_best.pth` | Path to the trained checkpoint, relative to `backend/`. |
-| `AUDIT_DB_PATH` | `audit_log.db` | Path to the SQLite audit log. |
+| `AUDIT_DB_PATH` | `audit_log.db` | Path to the SQLite audit log file. |
 
 ### `frontend/.env`
 
 | Variable | Description |
 |---|---|
-| `VITE_API_KEY` | Baked into the JS bundle at build time. **Must match** `backend/.env`'s `API_KEY` exactly. Note: this is visible in the shipped bundle — see [Security & Deployment Notes](#security--deployment-notes). |
+| `VITE_API_KEY` | Baked into the JS bundle at build time. Must match `API_KEY` in `backend/.env`. See [Security & Deployment Notes](#security--deployment-notes) for caveats. |
 
-> ⚠️ After changing either `.env` file, you must `npm run build` again for `frontend/.env` changes to take effect (env vars are inlined at build time, not read at runtime).
+> ⚠️ Changes to `frontend/.env` only take effect after `npm run build`. The env vars are inlined at build time, not read at runtime.
 
 ---
 
 ## Docker Deployment
 
 ```bash
-cp backend/.env.example backend/.env     # edit as needed
-cp frontend/.env.example frontend/.env   # must match backend API_KEY
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# Edit both files before building
 
 docker compose up --build
 ```
 
-This runs a multi-stage build (Vite build → Python/FastAPI runtime) and serves the app on `http://localhost:8000`. Model weights and the audit database are mounted as volumes (`./weights`, `./data`) so they persist across container rebuilds.
+This runs a multi-stage build (Vite → Python/FastAPI runtime) and serves the application on **http://localhost:8000**. Model weights and the audit database are mounted as volumes so they persist across container rebuilds.
 
 To enable GPU inference, uncomment the `deploy.resources` block in `docker-compose.yml` (requires the NVIDIA Container Toolkit).
 
@@ -212,16 +219,16 @@ To enable GPU inference, uncomment the `deploy.resources` block in `docker-compo
 
 ## API Reference
 
-All endpoints (except `/health` and `/`) require the `X-API-KEY` header if `API_KEY` is set in `backend/.env`.
+All endpoints except `/health` and `/` require the `X-API-KEY` header when `API_KEY` is set.
 
 ### `POST /api/v1/analyze`
 
 Analyze a single image or video file.
 
-| Param | Type | Description |
+| Parameter | Type | Description |
 |---|---|---|
 | `file` | form-data, required | Image (`jpg`, `png`, `webp`, `bmp`) or video (`mp4`, `avi`, `mov`, `mkv`, `webm`). |
-| `explain` | query, bool, default `true` | Generate an attention rollout heatmap. |
+| `explain` | query bool, default `true` | Generate attention rollout heatmap. |
 
 **Response:**
 
@@ -244,12 +251,12 @@ Analyze a single image or video file.
 
 ### `POST /api/v1/analyze/batch`
 
-Analyze up to 50 files in one request. `explain` defaults to `false` (heatmaps are expensive at scale).
+Analyze up to 50 files in one request. `explain` defaults to `false`.
 
 ```json
 {
   "summary": { "total": 12, "fake": 2, "real": 9, "errors": 1 },
-  "results": [ /* one object per file, same shape as /analyze, or {"filename": ..., "error": ...} */ ]
+  "results": [{ "..." }]
 }
 ```
 
@@ -259,11 +266,11 @@ Returns the most recent audit log entries.
 
 ### `GET /api/v1/history/{file_sha256}`
 
-Returns all past analyses for a given file hash — useful for verifying whether a specific file has been screened before.
+Returns all past analyses for a specific file hash.
 
 ### `GET /health`
 
-Liveness check. Returns `{"status": "ok", "version": "..."}`.
+Liveness check. Returns `{"status": "ok", "version": "2.0.0"}`.
 
 ---
 
@@ -275,15 +282,46 @@ Training data, benchmark results (FaceForensics++ / CelebDF / DFDC), and known l
 
 ## Security & Deployment Notes
 
-- **The frontend API key is not a secret.** `VITE_API_KEY` is compiled into the publicly-served JS bundle. The `X-API-KEY` mechanism is a basic gate suitable for pilot/internal deployments, not a substitute for proper access control.
-- **Recommended production setup:** place the application behind a reverse proxy (Nginx, Caddy, etc.) with IP allowlisting, mutual TLS, or basic auth, and treat `API_KEY` as a secondary layer rather than the primary control.
-- **CORS** is locked to explicit origins via `CORS_ORIGINS` — do not set this to `*` in any deployment handling real evidence.
-- **Audit log** (`audit_log.db`) contains file hashes and filenames of all analysed media. Treat it as sensitive data and back it up / rotate access according to your organization's evidence-handling policy.
-- This system provides **probabilistic screening output only**. See the `disclaimer` field returned alongside `explanation_summary` in API responses, and [`MODEL_CARD.md`](MODEL_CARD.md) for known failure modes.
+- **The frontend API key is not a secret.** `VITE_API_KEY` is compiled into the publicly-served JS bundle and is visible to anyone who inspects the source. The `X-API-KEY` mechanism is a basic access gate suitable for internal or pilot deployments — it is not a substitute for proper access control.
+- **Recommended production setup:** deploy behind a reverse proxy (Nginx, Caddy) with IP allowlisting or mutual TLS. Treat `API_KEY` as a secondary layer, not the primary security boundary.
+- **CORS** is locked to explicit origins via `CORS_ORIGINS`. Do not set this to `*` in any deployment handling real evidence.
+- **Audit log** (`audit_log.db`) records file hashes and filenames of all analysed media. Treat it as sensitive operational data — back it up and restrict access per your organization's evidence-handling policy.
+- Results are **probabilistic screening outputs only**. They should be treated as one input to a broader investigation, not as standalone conclusions.
 
 ---
 
 ## Development
+
+### Running in development mode (two terminals)
+
+**Terminal 1 — Backend:**
+```bash
+cd backend
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+uvicorn main:app --reload
+```
+
+**Terminal 2 — Frontend (hot reload):**
+```bash
+cd frontend
+npm run dev
+```
+
+Frontend runs on **http://localhost:5173** with API requests proxied to `http://127.0.0.1:8000`.
+
+### Running as a single app (production mode)
+
+```bash
+# Step 1: build the frontend
+cd frontend
+npm run build
+
+# Step 2: serve everything through FastAPI
+cd ../backend
+uvicorn main:app --reload
+```
+
+Open **http://localhost:8000**.
 
 ### Running tests
 
@@ -292,24 +330,15 @@ cd backend
 pytest tests/ -v
 ```
 
-### Frontend dev server (hot reload)
-
-```bash
-cd frontend
-npm run dev
-```
-
-Runs on `http://localhost:5173` (or `3000`, per `vite.config.js`) with API requests proxied to `http://127.0.0.1:8000`. This is separate from the production build served by FastAPI — rebuild with `npm run build` to test the actual served bundle.
-
 ### CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR: backend compile-check + smoke test on CPU with untrained weights, and a frontend production build.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU smoke test with untrained weights, and a frontend production build.
 
 ---
 
 ## Related Projects
 
-- [ViT-CORE](https://github.com/niiomar/ViT-CORE) — the underlying training pipeline (dataset preparation, augmentations, training loop, evaluation) developed as part of an MSc Computer Science dissertation.
+- [ViT-CORE](https://github.com/niiomar/ViT-CORE) — the underlying training pipeline (dual-view architecture, augmentations, loss functions, evaluation) developed as part of an MSc Computer Science dissertation.
 
 ---
 
