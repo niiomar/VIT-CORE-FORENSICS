@@ -1,6 +1,6 @@
 # ViT-CORE-FORENSICS
 
-**An enterprise-grade forensic deepfake detection workspace** built on a Dual-View Vision Transformer framework, delivering probabilistic, explainable assessments of media manipulation with full chain-of-custody audit logging.
+**A deepfake detection workspace** built on a Dual-View Vision Transformer framework, delivering probabilistic, explainable assessments of media manipulation with full chain-of-custody audit logging.
 
 [![CI](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml/badge.svg)](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
