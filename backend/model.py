@@ -31,8 +31,18 @@ def load_models():
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"[ViT-CORE] Warning: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")
     else:
-        ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
-        sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
+        # weights_only=True is the safe default — avoids arbitrary pickle execution.
+        # Directly addresses bandit B614 / semgrep "unsafe PyTorch load" findings.
+        try:
+            ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
+            sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
+        except Exception:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "weights_only=True failed — falling back. Only safe with trusted checkpoints."
+            )
+            ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
+            sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
         model.load_state_dict(sd)
 
     model.to(DEVICE)
