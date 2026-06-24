@@ -1,20 +1,27 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig({
-  root: '.',
+  // 1. DEVELOPMENT SETTINGS (Routing localhost:5173 to FastAPI)
   server: {
-    port: 3000,
+    port: 5173,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        secure: false
+        secure: false,
       }
     }
   },
+  
+  // 2. PRODUCTION SETTINGS (Building directly into the backend)
   build: {
-    outDir: '../backend/static', // Compiles production chunks straight into the FastAPI backend folder
-    emptyOutDir: true,
-    minify: 'esbuild'
-  }
+    outDir: '../backend/static', 
+    emptyOutDir: true, 
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+      },
+    },
+  },
 });
