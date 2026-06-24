@@ -1,5 +1,104 @@
 import './styles.css';
 
+// 1. INJECT YOUR CUSTOM HTML SHELL
+document.getElementById('app').innerHTML = `
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div>
+          <h1>ViT-CORE</h1>
+          <p>Forensic Workspace</p>
+        </div>
+      </div>
+
+      <div class="session-stats">
+        <div class="stat-box"><span>Scans</span><strong id="stat-total">0</strong></div>
+        <div class="stat-box"><span>Real</span><strong id="stat-real-count" class="stat-real">0</strong></div>
+        <div class="stat-box"><span>Fake</span><strong id="stat-fake-count" class="stat-fake">0</strong></div>
+      </div>
+
+      <div id="drop-zone">
+        <svg style="width:24px;height:24px;margin-bottom:8px;fill:var(--text-hi)" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+        <h2>Load Evidence File</h2>
+        <p>JPG, PNG, MP4, AVI, MOV</p>
+        <input id="file-input" type="file" accept="image/*,video/*" />
+      </div>
+
+      <div class="explain-toggle-container">
+        <input id="explain-toggle" type="checkbox" checked />
+        <label for="explain-toggle">ATTENTION ROLLOUT (TTA HEATMAP)</label>
+      </div>
+
+      <button id="analyze-btn" class="action-btn" disabled>RUN ANALYSIS</button>
+
+      <div class="history-header">
+        <span>Session History</span>
+        <button id="clear-history-btn" class="clear-history">CLEAR</button>
+      </div>
+
+      <div id="history-list" class="history-list"></div>
+    </aside>
+
+    <main class="main-view">
+      <div id="idle-state">
+        <div class="idle-eye"></div>
+        <p>AWAITING TELEMETRY</p>
+      </div>
+
+      <div id="result-state">
+        <div class="warning-banner" id="low-conf-warning">
+          ⚠ Low Confidence Result: The media contains ambiguous features. Manual review recommended.
+        </div>
+        <div class="warning-banner" id="low-qual-warning">
+          ⚠ Low Quality Media: The detected face is blurry or poorly lit. Accuracy may be reduced.
+        </div>
+
+        <div class="top-stats">
+          <div class="gauge-container">
+            <svg class="gauge-svg" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r="70" class="gauge-bg"></circle>
+              <circle cx="80" cy="80" r="70" id="gauge-fill" class="gauge-fill"></circle>
+            </svg>
+            <div class="gauge-text">
+              <div class="verdict" id="gauge-verdict">--</div>
+              <div class="conf" id="gauge-conf">0%</div>
+            </div>
+          </div>
+
+          <div class="workspace-panels">
+            <div class="preview-container" id="preview-wrapper">
+              <div class="panel-title">EVIDENCE TELEMETRY</div>
+              <div class="scan-line"></div>
+              <img id="preview-img" style="display:none;" />
+              <video id="video-preview" controls style="display:none;"></video>
+            </div>
+
+            <div class="preview-container" id="heatmap-wrapper">
+              <div class="panel-title">ATTENTION ROLLOUT (ViT)</div>
+              <div class="scan-line"></div>
+              <img id="heatmap-img" />
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="mc-label">Analysis Time</div><div class="mc-val" id="stat-time">--</div></div>
+          <div class="metric-card"><div class="mc-label">Face Det. Status</div><div class="mc-val" id="stat-face">--</div></div>
+          <div class="metric-card"><div class="mc-label">Face Quality</div><div class="mc-val" id="stat-quality">--</div></div>
+          <div class="metric-card"><div class="mc-label">Media Format</div><div class="mc-val" id="stat-type">--</div></div>
+          <div class="metric-card"><div class="mc-label">Agg. Score (0-1)</div><div class="mc-val" id="stat-score">--</div></div>
+          <div class="metric-card"><div class="mc-label">Frames Evaluated</div><div class="mc-val" id="stat-frames">--</div></div>
+        </div>
+
+        <div class="btn-row">
+          <button id="export-btn" class="secondary-btn">EXPORT FORENSIC REPORT (.PDF)</button>
+        </div>
+      </div>
+    </main>
+  </div>
+`;
+
+// 2. DOM QUERIES
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const analyzeBtn = document.getElementById('analyze-btn');
@@ -13,15 +112,22 @@ const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
 
+// 3. STATE & INIT
 let selectedFile = null;
 let currentReport = null;
 let sessionHistory = JSON.parse(localStorage.getItem('vitcore_history') || '[]');
 renderHistory();
 
+// 4. EVENT LISTENERS
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
-dropZone.addEventListener('dragover', e => e.preventDefault());
-dropZone.addEventListener('drop', e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--blue)'; });
+dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--text-mid)'; });
+dropZone.addEventListener('drop', e => { 
+  e.preventDefault(); 
+  dropZone.style.borderColor = 'var(--text-mid)'; 
+  handleFile(e.dataTransfer.files[0]); 
+});
 
 function handleFile(file) {
   if (!file) return;
@@ -29,8 +135,15 @@ function handleFile(file) {
   analyzeBtn.disabled = false;
   analyzeBtn.textContent = `ANALYZE: ${file.name}`;
   const isVid = file.type.startsWith('video/');
-  if (isVid) { videoPreview.src = URL.createObjectURL(file); videoPreview.style.display = 'block'; previewImg.style.display = 'none'; } 
-  else { previewImg.src = URL.createObjectURL(file); previewImg.style.display = 'block'; videoPreview.style.display = 'none'; }
+  if (isVid) { 
+    videoPreview.src = URL.createObjectURL(file); 
+    videoPreview.style.display = 'block'; 
+    previewImg.style.display = 'none'; 
+  } else { 
+    previewImg.src = URL.createObjectURL(file); 
+    previewImg.style.display = 'block'; 
+    videoPreview.style.display = 'none'; 
+  }
   heatmapImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 }
 
@@ -50,7 +163,11 @@ analyzeBtn.addEventListener('click', async () => {
   const explain = document.getElementById('explain-toggle').checked;
 
   try {
-    const res = await fetch(`/api/v1/analyze?explain=${explain}`, { method: 'POST', body: fd, headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } });
+    const res = await fetch(`/api/v1/analyze?explain=${explain}`, { 
+      method: 'POST', 
+      body: fd, 
+      headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
     
@@ -75,12 +192,12 @@ function renderResult(data, filename) {
 
   document.getElementById('gauge-verdict').textContent = data.verdict;
   document.getElementById('gauge-verdict').style.color = color;
-  document.getElementById('gauge-conf').textContent = data.confidence;
+  document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
   setTimeout(() => { gaugeFill.style.strokeDashoffset = 440 - (440 * (data.confidence / 100)); }, 100);
 
-  document.getElementById('stat-time').textContent = data.processing_time_sec + 's';
+  document.getElementById('stat-time').textContent = `${data.processing_time_sec}s`;
   document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'No Face Found';
   document.getElementById('stat-quality').textContent = data.face_quality;
   document.getElementById('stat-type').textContent = data.type.toUpperCase();
@@ -109,7 +226,10 @@ function renderHistory() {
   sessionHistory.slice().reverse().forEach(item => {
     const isFake = item.verdict === 'FAKE';
     isFake ? fakes++ : reals++;
-    list.innerHTML += `<div class="history-item ${isFake ? 'fake' : 'real'}"><div class="hi-name" title="${item.filename}">${item.filename}</div><div class="hi-conf" style="color: ${isFake ? 'var(--red)' : 'var(--green)'}">${item.confidence}%</div></div>`;
+    list.innerHTML += `<div class="history-item ${isFake ? 'fake' : 'real'}">
+      <div class="hi-name" title="${item.filename}">${item.filename}</div>
+      <div class="hi-conf" style="color: ${isFake ? 'var(--red)' : 'var(--green)'}">${item.confidence}%</div>
+    </div>`;
   });
   document.getElementById('stat-total').textContent = sessionHistory.length;
   document.getElementById('stat-real-count').textContent = reals;
@@ -122,12 +242,14 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
     sessionHistory = []; localStorage.removeItem('vitcore_history'); renderHistory();
     idleState.style.display = 'flex'; resultState.style.display = 'none'; selectedFile = null;
     analyzeBtn.textContent = 'RUN ANALYSIS'; analyzeBtn.disabled = true;
+    gaugeFill.style.strokeDashoffset = 440;
   }
 });
 
 document.getElementById('export-btn').addEventListener('click', () => {
   if (!currentReport) return;
-  const { jsPDF } = window.jspdf; const doc = new jsPDF();
+  const { jsPDF } = window.jspdf; 
+  const doc = new jsPDF();
   doc.setFont("courier", "bold"); doc.setFontSize(22); doc.text("ViT-CORE Forensic Report", 20, 20);
   doc.setFontSize(12); doc.setFont("courier", "normal"); doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30); doc.line(20, 35, 190, 35);
   doc.setFont("courier", "bold"); doc.text("Media File Details", 20, 45);
