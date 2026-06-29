@@ -12,6 +12,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+
 # Force CPU and ensure no checkpoint is found (CI doesn't have weights)
 os.environ["MODEL_WEIGHTS_PATH"] = "nonexistent.pth"
 
@@ -29,6 +30,7 @@ def test_pipeline_runs_on_blank_image():
     assert 0.0 <= prob <= 1.0
     assert isinstance(face_detected, bool)
     assert quality["status"] in ("Poor", "Fair", "High", "N/A")
+    
     # Heatmap should be a non-empty base64 string when explainability is on
     assert isinstance(heatmap, str)
 
