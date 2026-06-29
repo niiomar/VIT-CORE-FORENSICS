@@ -1,11 +1,11 @@
 // API key is injected at BUILD TIME from the VITE_API_KEY environment
 // variable (see frontend/.env.example). This is still visible in the
-// shipped JS bundle — browser-side secrets are never truly secret — but
+// shipped JS bundle,  browser-side secrets are never truly secret but
 // it at least removes the hardcoded literal from source control and lets
 // each deployment use its own key without code changes.
 //
 // For a real multi-user deployment, replace this with a login flow that
-// exchanges user credentials for a short-lived session token instead.
+// exchanges user credentials for a short-lived session token instead
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 function authHeaders() {
