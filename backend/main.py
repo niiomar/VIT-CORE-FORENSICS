@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ViT-CORE-FORENSICS API", version=MODEL_VERSION, lifespan=lifespan)
 
-# Security: explicit origins and explicit headers — no wildcards.
+# Security: explicit origins and explicit headers.
 CORS_ORIGINS = [o.strip() for o in os.getenv(
     "CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
 ).split(",") if o.strip()]
@@ -125,9 +125,9 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     faces_found = any(f["face_detected"] for f in frame_data)
 
-    # Conservative aggregation: report the WORST quality seen across all
-    # frames where a face was detected, not just the first one. A single
-    # blurry frame in an otherwise sharp video should still be flagged.
+    
+    # Conservative aggregation: report the WORST quality seen across all frames where a face was detected, not just the first one.
+    # A single blurry frame in an otherwise sharp video should still be flagged.
     quality_statuses = [f["quality"]["status"] for f in frame_data if f["face_detected"]]
     if quality_statuses:
         from model import QUALITY_RANK
