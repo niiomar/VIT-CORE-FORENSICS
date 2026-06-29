@@ -112,11 +112,13 @@ const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
 
+
 // 3. STATE & INIT
 let selectedFile = null;
 let currentReport = null;
 let sessionHistory = JSON.parse(localStorage.getItem('vitcore_history') || '[]');
 renderHistory();
+
 
 // 4. EVENT LISTENERS
 dropZone.addEventListener('click', () => fileInput.click());
