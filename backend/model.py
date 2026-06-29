@@ -31,7 +31,8 @@ def load_models():
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"[ViT-CORE] Warning: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")
     else:
-        # weights_only=True is the safe default — avoids arbitrary pickle execution.
+        
+        # weights_only=True is the safe default, avoids arbitrary pickle execution.
         # Directly addresses bandit B614 / semgrep "unsafe PyTorch load" findings.
         try:
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
