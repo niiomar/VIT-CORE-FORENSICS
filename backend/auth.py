@@ -34,7 +34,7 @@ async def verify_api_key(x_api_key: str | None = Header(default=None, alias="X-A
     If API_KEY is unset on the server, this is a no-op (local dev mode).
     """
     if not API_KEY:
-        return  # auth disabled
+        return  # authentication disabled
 
     if not x_api_key or x_api_key != API_KEY:
         raise HTTPException(
