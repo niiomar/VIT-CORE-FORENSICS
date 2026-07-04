@@ -16,20 +16,33 @@ export function renderHistoryItem(item) {
   `;
 }
 
-export function updateHistory(sessionHistory) {
+// Accepts the subset to render, but calculates global stats off the full history array
+export function updateHistory(filteredHistory, fullHistory = []) {
   const list = document.getElementById('history-list');
   if (!list) return;
   
   list.innerHTML = '';
-  let fakes = 0; let reals = 0;
   
-  sessionHistory.forEach(item => {
-    const isFake = item.verdict === 'FAKE';
-    isFake ? fakes++ : reals++;
-    list.innerHTML += renderHistoryItem(item);
+  if (filteredHistory.length === 0) {
+      list.innerHTML = `<p style="text-align:center;font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:20px;">NO LOGS MATCH QUERY</p>`;
+  } else {
+      filteredHistory.forEach(item => {
+        list.innerHTML += renderHistoryItem(item);
+      });
+  }
+  
+  let fakes = 0; let reals = 0;
+  const statSource = fullHistory.length > 0 ? fullHistory : filteredHistory;
+  
+  statSource.forEach(item => {
+    item.verdict === 'FAKE' ? fakes++ : reals++;
   });
   
-  document.getElementById('stat-total').textContent = sessionHistory.length;
-  document.getElementById('stat-real-count').textContent = reals;
-  document.getElementById('stat-fake-count').textContent = fakes;
+  const totEl = document.getElementById('stat-total');
+  const realEl = document.getElementById('stat-real-count');
+  const fakeEl = document.getElementById('stat-fake-count');
+  
+  if(totEl) totEl.textContent = statSource.length;
+  if(realEl) realEl.textContent = reals;
+  if(fakeEl) fakeEl.textContent = fakes;
 }
