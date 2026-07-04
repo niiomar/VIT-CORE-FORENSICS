@@ -36,7 +36,7 @@ let selectedFile = null;
 let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
-let objectUrlCache = null; // Cache to handle tab switching
+let objectUrlCache = null; 
 
 async function syncDatabaseHistory() {
   try {
@@ -65,7 +65,7 @@ dropZone.addEventListener('drop', e => {
   handleFile(e.dataTransfer.files[0]); 
 });
 
-// PHASE 1: Tabbed Switching Logic
+// Tabbed Switching Logic
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -77,7 +77,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-// PHASE 1: Click-to-Reload History
+// Click-to-Reload History
 historyList.addEventListener('click', (e) => {
   const item = e.target.closest('.hist-item');
   if (!item) return;
@@ -86,17 +86,14 @@ historyList.addEventListener('click', (e) => {
   const entry = sessionHistory.find(x => x.file_sha256 === hash);
   
   if (entry) {
-    // Clear styling on all history items, highlight clicked
     document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
     item.classList.add('active-log');
 
-    // Revoke old object URL if we have one to prevent leaks
     if (objectUrlCache) {
       URL.revokeObjectURL(objectUrlCache);
       objectUrlCache = null;
     }
     
-    // UI Resets for Database Load
     idleState.style.display = 'none';
     resultState.classList.add('visible');
     previewImg.style.display = 'none';
@@ -120,7 +117,6 @@ function handleFile(file) {
   
   const isVid = file.type.startsWith('video/');
   
-  // Reset media elements
   [previewImg, videoPreview, overlayBaseImg, overlayBaseVideo].forEach(el => el.style.display = 'none');
 
   if (isVid) { 
@@ -171,7 +167,6 @@ analyzeBtn.addEventListener('click', async () => {
   resultState.classList.add('visible');
   previewWrapper.classList.add('scanning');
   
-  // Ensure we switch to Source Tab when analyzing starts
   document.querySelector('[data-target="tab-source"]').click();
   
   setLoading(true);
@@ -199,7 +194,6 @@ analyzeBtn.addEventListener('click', async () => {
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
     updateHistory(sessionHistory);
     
-    // Highlight the newest run
     setTimeout(() => {
         const firstLog = document.querySelector('.hist-item');
         if(firstLog) firstLog.classList.add('active-log');
@@ -224,7 +218,6 @@ function renderResult(data, filename) {
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
-  // 439.8 is 2 * pi * 70 (the radius of the newly enlarged gauge)
   setTimeout(() => { gaugeFill.style.strokeDashoffset = 439.8 - (439.8 * (data.confidence / 100)); }, 100);
 
   document.getElementById('stat-score').textContent = data.probability.toFixed(4);
