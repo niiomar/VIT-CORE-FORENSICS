@@ -26,9 +26,9 @@ export function renderWorkspace() {
         <div class="executive-panel">
           <div class="exec-left">
             <div class="trust-ring-box">
-              <svg class="gauge-svg" viewBox="0 0 160 160">
-                <circle cx="80" cy="80" r="70" class="gauge-bg"></circle>
-                <circle cx="80" cy="80" r="70" id="gauge-fill" class="gauge-fill"></circle>
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" class="gauge-bg"></circle>
+                <circle cx="60" cy="60" r="52" id="gauge-fill" class="gauge-fill"></circle>
               </svg>
               <div class="gauge-text">
                 <span class="gauge-val" id="gauge-conf">0%</span>
@@ -106,19 +106,23 @@ export function renderWorkspace() {
           </div>
           <div class="media-content">
             <div class="scan-line"></div>
+            
             <div id="tab-source" class="tab-layer active">
               <img id="preview-img" style="display:none;" />
               <video id="video-preview" controls style="display:none;"></video>
             </div>
+            
             <div id="tab-heatmap" class="tab-layer">
               <img id="heatmap-img" style="display:none;"/>
-              <p id="heatmap-placeholder" style="font-family:var(--mono); color:var(--text-dim); font-size:11px;">HEATMAP NOT GENERATED</p>
+              <p id="heatmap-placeholder" style="font-family:var(--mono); color:var(--text-dim); font-size:11px; padding:40px;">HEATMAP NOT GENERATED</p>
             </div>
+
             <div id="tab-overlay" class="tab-layer">
               <img id="overlay-base-img" style="display:none;" />
               <video id="overlay-base-video" style="display:none;" muted></video>
               <img id="overlay-heat" class="overlay-heat" style="display:none;" />
             </div>
+            
           </div>
         </div>
 
