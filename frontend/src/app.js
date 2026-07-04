@@ -1,100 +1,13 @@
 import './styles.css';
+import { renderSidebar } from './components/sidebar.js';
+import { renderWorkspace } from './components/workspace.js';
+import { updateHistory } from './components/history.js';
 
-// 1. INJECT YOUR CUSTOM HTML SHELL
+// 1. INJECT CUSTOM HTML SHELL
 document.getElementById('app').innerHTML = `
   <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">
-        <div>
-          <h1>ViT-CORE</h1>
-          <p>Forensic Workspace</p>
-        </div>
-      </div>
-
-      <div class="session-stats">
-        <div class="stat-box"><span>Scans</span><strong id="stat-total">0</strong></div>
-        <div class="stat-box"><span>Real</span><strong id="stat-real-count" class="stat-real">0</strong></div>
-        <div class="stat-box"><span>Fake</span><strong id="stat-fake-count" class="stat-fake">0</strong></div>
-      </div>
-
-      <div id="drop-zone">
-        <svg style="width:24px;height:24px;margin-bottom:8px;fill:var(--text-hi)" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-        <h2>Load Evidence File</h2>
-        <p>JPG, PNG, MP4, AVI, MOV</p>
-        <input id="file-input" type="file" accept="image/*,video/*" />
-      </div>
-
-      <div class="explain-toggle-container">
-        <input id="explain-toggle" type="checkbox" checked />
-        <label for="explain-toggle">ATTENTION ROLLOUT (TTA HEATMAP)</label>
-      </div>
-
-      <button id="analyze-btn" class="action-btn" disabled>RUN ANALYSIS</button>
-
-      <div class="history-header">
-        <span>Session History</span>
-        <button id="clear-history-btn" class="clear-history">CLEAR</button>
-      </div>
-
-      <div id="history-list" class="history-list"></div>
-    </aside>
-
-    <main class="main-view">
-      <div id="idle-state">
-        <div class="idle-eye"></div>
-        <p>AWAITING TELEMETRY</p>
-      </div>
-
-      <div id="result-state">
-        <div class="warning-banner" id="low-conf-warning">
-          ⚠ Low Confidence Result: The media contains ambiguous features. Manual review recommended.
-        </div>
-        <div class="warning-banner" id="low-qual-warning">
-          ⚠ Low Quality Media: The detected face is blurry or poorly lit. Accuracy may be reduced.
-        </div>
-
-        <div class="top-stats">
-          <div class="gauge-container">
-            <svg class="gauge-svg" viewBox="0 0 160 160">
-              <circle cx="80" cy="80" r="70" class="gauge-bg"></circle>
-              <circle cx="80" cy="80" r="70" id="gauge-fill" class="gauge-fill"></circle>
-            </svg>
-            <div class="gauge-text">
-              <div class="verdict" id="gauge-verdict">--</div>
-              <div class="conf" id="gauge-conf">0%</div>
-            </div>
-          </div>
-
-          <div class="workspace-panels">
-            <div class="preview-container" id="preview-wrapper">
-              <div class="panel-title">EVIDENCE TELEMETRY</div>
-              <div class="scan-line"></div>
-              <img id="preview-img" style="display:none;" />
-              <video id="video-preview" controls style="display:none;"></video>
-            </div>
-
-            <div class="preview-container" id="heatmap-wrapper">
-              <div class="panel-title">ATTENTION ROLLOUT (ViT)</div>
-              <div class="scan-line"></div>
-              <img id="heatmap-img" />
-            </div>
-          </div>
-        </div>
-
-        <div class="metrics-grid">
-          <div class="metric-card"><div class="mc-label">Analysis Time</div><div class="mc-val" id="stat-time">--</div></div>
-          <div class="metric-card"><div class="mc-label">Face Det. Status</div><div class="mc-val" id="stat-face">--</div></div>
-          <div class="metric-card"><div class="mc-label">Face Quality</div><div class="mc-val" id="stat-quality">--</div></div>
-          <div class="metric-card"><div class="mc-label">Media Format</div><div class="mc-val" id="stat-type">--</div></div>
-          <div class="metric-card"><div class="mc-label">Agg. Score (0-1)</div><div class="mc-val" id="stat-score">--</div></div>
-          <div class="metric-card"><div class="mc-label">Frames Evaluated</div><div class="mc-val" id="stat-frames">--</div></div>
-        </div>
-
-        <div class="btn-row">
-          <button id="export-btn" class="secondary-btn">EXPORT FORENSIC REPORT (.PDF)</button>
-        </div>
-      </div>
-    </main>
+    ${renderSidebar()}
+    ${renderWorkspace()}
   </div>
 `;
 
@@ -116,7 +29,7 @@ const gaugeFill = document.getElementById('gauge-fill');
 let selectedFile = null;
 let currentReport = null;
 let sessionHistory = [];
-
+let loadingInterval = null;
 
 // Fetch true audit logs from the Python database
 async function syncDatabaseHistory() {
@@ -126,28 +39,23 @@ async function syncDatabaseHistory() {
     });
     if (res.ok) {
       const data = await res.json();
-      
-      // Reverse the array so that the existing renderHistory() logic correctly pushes 
-      // the newest items to the top of the list
-      sessionHistory = data.entries.reverse();
-      renderHistory();
+      sessionHistory = data.entries.reverse(); // Reverse so newest is unshifted properly
+      updateHistory(sessionHistory);
     }
   } catch (err) {
     console.error("Database sync failed:", err);
   }
 }
-
 syncDatabaseHistory();
-
 
 // 4. EVENT LISTENERS
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--blue)'; });
-dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--text-mid)'; });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
 dropZone.addEventListener('drop', e => { 
   e.preventDefault(); 
-  dropZone.style.borderColor = 'var(--text-mid)'; 
+  dropZone.classList.remove('dragover'); 
   handleFile(e.dataTransfer.files[0]); 
 });
 
@@ -155,7 +63,7 @@ function handleFile(file) {
   if (!file) return;
   selectedFile = file;
   analyzeBtn.disabled = false;
-  analyzeBtn.textContent = `ANALYZE: ${file.name}`;
+  analyzeBtn.textContent = `ANALYZE: ${file.name.length > 20 ? file.name.slice(0,18)+'…' : file.name}`;
   const isVid = file.type.startsWith('video/');
   if (isVid) { 
     videoPreview.src = URL.createObjectURL(file); 
@@ -167,16 +75,38 @@ function handleFile(file) {
     videoPreview.style.display = 'none'; 
   }
   heatmapImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  
+  // Reset UI
+  idleState.style.display = 'flex'; 
+  resultState.classList.remove('visible');
+  gaugeFill.style.strokeDashoffset = 326.7;
+}
+
+function setLoading(on) {
+  analyzeBtn.disabled = on;
+  if (!on) {
+    clearInterval(loadingInterval);
+    analyzeBtn.textContent = `ANALYZE: ${selectedFile.name.length > 20 ? selectedFile.name.slice(0,18)+'…' : selectedFile.name}`;
+    return;
+  }
+  
+  const steps = ['Extracting Frames...', 'Running MTCNN...', 'Attention Rollout...', 'Aggregating Scores...'];
+  let i = 0;
+  analyzeBtn.textContent = steps[0];
+  loadingInterval = setInterval(() => {
+    i = (i + 1) % steps.length;
+    analyzeBtn.textContent = steps[i];
+  }, 400);
 }
 
 analyzeBtn.addEventListener('click', async () => {
   idleState.style.display = 'none';
-  resultState.style.display = 'block';
+  resultState.classList.add('visible');
   previewWrapper.classList.add('scanning');
   heatmapWrapper.classList.add('scanning');
-  analyzeBtn.disabled = true;
-  analyzeBtn.textContent = 'PROCESSING TTA & MTCNN...';
-  gaugeFill.style.strokeDashoffset = 440; 
+  
+  setLoading(true);
+  gaugeFill.style.strokeDashoffset = 326.7; 
   document.getElementById('low-conf-warning').style.display = 'none';
   document.getElementById('low-qual-warning').style.display = 'none';
 
@@ -196,36 +126,41 @@ analyzeBtn.addEventListener('click', async () => {
     previewWrapper.classList.remove('scanning');
     heatmapWrapper.classList.remove('scanning');
     renderResult(data, selectedFile.name);
-    addToHistory(data, selectedFile.name);
+    
+    // Add to history list
+    sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
+    updateHistory(sessionHistory);
+    
   } catch (err) {
     alert("Analysis failed: " + err.message);
     previewWrapper.classList.remove('scanning');
     heatmapWrapper.classList.remove('scanning');
+  } finally {
+    setLoading(false);
   }
-  analyzeBtn.disabled = false;
-  analyzeBtn.textContent = 'RUN ANALYSIS';
 });
 
 function renderResult(data, filename) {
   currentReport = { ...data, filename };
   const isFake = data.verdict === 'FAKE';
   const cls = isFake ? 'fake' : 'real';
-  const color = isFake ? 'var(--red)' : 'var(--green)';
 
-  document.getElementById('gauge-verdict').textContent = data.verdict;
-  document.getElementById('gauge-verdict').style.color = color;
+  document.getElementById('trust-title').textContent = data.verdict;
+  document.getElementById('trust-title').className = `trust-title title-${cls}`;
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
+  // 326.7 is 2 * pi * 52 (the radius of the new gauge)
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
-  setTimeout(() => { gaugeFill.style.strokeDashoffset = 440 - (440 * (data.confidence / 100)); }, 100);
+  setTimeout(() => { gaugeFill.style.strokeDashoffset = 326.7 - (326.7 * (data.confidence / 100)); }, 100);
 
-  document.getElementById('stat-time').textContent = `${data.processing_time_sec}s`;
+  document.getElementById('stat-score').textContent = data.probability.toFixed(4);
+  document.getElementById('stat-score').style.color = isFake ? 'var(--red)' : 'var(--green)';
   document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'No Face Found';
   document.getElementById('stat-quality').textContent = data.face_quality;
-  document.getElementById('stat-type').textContent = data.type.toUpperCase();
-  document.getElementById('stat-score').textContent = data.probability.toFixed(3);
-  document.getElementById('stat-score').style.color = color;
-  document.getElementById('stat-frames').textContent = data.frames_analyzed;
+  
+  document.getElementById('kpi-format').textContent = data.type.toUpperCase();
+  document.getElementById('kpi-frames').textContent = data.frames_analyzed;
+  document.getElementById('kpi-time').textContent = `${data.processing_time_sec}s`;
   
   if (data.is_low_confidence) document.getElementById('low-conf-warning').style.display = 'flex';
   if (data.face_quality === "Poor") document.getElementById('low-qual-warning').style.display = 'flex';
@@ -235,36 +170,14 @@ function renderResult(data, filename) {
   }
 }
 
-function addToHistory(data, filename) {
-  sessionHistory.push({ timestamp: new Date().toISOString(), filename, ...data });
-  renderHistory();
-}
-
-function renderHistory() {
-  const list = document.getElementById('history-list');
-  list.innerHTML = '';
-  let fakes = 0; let reals = 0;
-  sessionHistory.slice().reverse().forEach(item => {
-    const isFake = item.verdict === 'FAKE';
-    isFake ? fakes++ : reals++;
-    list.innerHTML += `<div class="history-item ${isFake ? 'fake' : 'real'}">
-      <div class="hi-name" title="${item.filename}">${item.filename}</div>
-      <div class="hi-conf" style="color: ${isFake ? 'var(--red)' : 'var(--green)'}">${item.confidence}%</div>
-    </div>`;
-  });
-  document.getElementById('stat-total').textContent = sessionHistory.length;
-  document.getElementById('stat-real-count').textContent = reals;
-  document.getElementById('stat-fake-count').textContent = fakes;
-}
-
 document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
   if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {
     sessionHistory = []; 
-    renderHistory();
-    idleState.style.display = 'flex'; resultState.style.display = 'none'; selectedFile = null;
-    analyzeBtn.textContent = 'RUN ANALYSIS'; analyzeBtn.disabled = true;
-    gaugeFill.style.strokeDashoffset = 440;
+    updateHistory(sessionHistory);
+    idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
+    analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
+    gaugeFill.style.strokeDashoffset = 326.7;
   }
 });
 
