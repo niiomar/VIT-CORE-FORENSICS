@@ -51,7 +51,7 @@ export function renderSidebar() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
           SESSION LOG
         </div>
-        <button class="clear-btn" id="clear-history-btn">CLEAR</button>
+        <button class="clear-history" id="clear-history-btn">CLEAR</button>
       </div>
       <div class="history-list" id="history-list"></div>
     </aside>
