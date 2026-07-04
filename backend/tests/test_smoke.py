@@ -4,6 +4,7 @@ untrained weights (no vitcore_best.pth present in CI). This won't catch
 accuracy regressions, but it catches import errors, shape mismatches, and
 broken hooks before they hit main.
 """
+
 import os
 import sys
 
