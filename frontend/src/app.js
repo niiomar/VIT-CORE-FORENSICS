@@ -31,7 +31,7 @@ let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
 
-// Fetch true audit logs from the Python database
+// Database Sync function handling explicit backend audit history
 async function syncDatabaseHistory() {
   try {
     const res = await fetch('/api/v1/history', {
@@ -39,7 +39,7 @@ async function syncDatabaseHistory() {
     });
     if (res.ok) {
       const data = await res.json();
-      sessionHistory = data.entries.reverse(); // Reverse so newest is unshifted properly
+      sessionHistory = data.entries.reverse(); // Reverse so newest pushes appropriately
       updateHistory(sessionHistory);
     }
   } catch (err) {
@@ -76,7 +76,6 @@ function handleFile(file) {
   }
   heatmapImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
   
-  // Reset UI
   idleState.style.display = 'flex'; 
   resultState.classList.remove('visible');
   gaugeFill.style.strokeDashoffset = 326.7;
@@ -127,7 +126,6 @@ analyzeBtn.addEventListener('click', async () => {
     heatmapWrapper.classList.remove('scanning');
     renderResult(data, selectedFile.name);
     
-    // Add to history list
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
     updateHistory(sessionHistory);
     
@@ -149,7 +147,6 @@ function renderResult(data, filename) {
   document.getElementById('trust-title').className = `trust-title title-${cls}`;
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
-  // 326.7 is 2 * pi * 52 (the radius of the new gauge)
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
   setTimeout(() => { gaugeFill.style.strokeDashoffset = 326.7 - (326.7 * (data.confidence / 100)); }, 100);
 
