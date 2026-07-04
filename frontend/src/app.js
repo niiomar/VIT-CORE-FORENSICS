@@ -112,13 +112,30 @@ const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
 
-
 // 3. STATE & INIT
 let selectedFile = null;
 let currentReport = null;
-let sessionHistory = JSON.parse(localStorage.getItem('vitcore_history') || '[]');
-renderHistory();
+let sessionHistory = [];
 
+// Fetch true audit logs from the Python database
+async function syncDatabaseHistory() {
+  try {
+    const res = await fetch('/api/v1/history', {
+      headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // Reverse the array so that the existing renderHistory() logic correctly pushes 
+      // the newest items to the top of the list
+      sessionHistory = data.entries.reverse();
+      renderHistory();
+    }
+  } catch (err) {
+    console.error("Database sync failed:", err);
+  }
+}
+
+syncDatabaseHistory();
 
 // 4. EVENT LISTENERS
 dropZone.addEventListener('click', () => fileInput.click());
@@ -217,7 +234,6 @@ function renderResult(data, filename) {
 
 function addToHistory(data, filename) {
   sessionHistory.push({ timestamp: new Date().toISOString(), filename, ...data });
-  localStorage.setItem('vitcore_history', JSON.stringify(sessionHistory));
   renderHistory();
 }
 
@@ -240,8 +256,9 @@ function renderHistory() {
 
 document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
-  if (confirm("Clear the current session history?")) {
-    sessionHistory = []; localStorage.removeItem('vitcore_history'); renderHistory();
+  if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {
+    sessionHistory = []; 
+    renderHistory();
     idleState.style.display = 'flex'; resultState.style.display = 'none'; selectedFile = null;
     analyzeBtn.textContent = 'RUN ANALYSIS'; analyzeBtn.disabled = true;
     gaugeFill.style.strokeDashoffset = 440;
