@@ -29,7 +29,7 @@ export function renderWorkspace() {
           POOR EVIDENCE QUALITY — The detected face is highly degraded or blurry.
         </div>
 
-        <!-- PHASE 1: Enlarged Executive Panel -->
+        <!-- Executive Panel -->
         <div class="executive-panel">
           <div class="exec-left">
             <div class="trust-ring-box">
@@ -69,14 +69,44 @@ export function renderWorkspace() {
           </div>
         </div>
 
-        <!-- 2. KPI Strip -->
+        <!-- PHASE 2: Premium KPI Strip with Micro-charts -->
         <div class="kpi-strip">
-          <div class="kpi-item"><span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Format</span><span class="kpi-val" id="kpi-format">N/A</span></div>
-          <div class="kpi-item"><span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg> Frames Extracted</span><span class="kpi-val" id="kpi-frames">0</span></div>
-          <div class="kpi-item"><span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Compute Time</span><span class="kpi-val" id="kpi-time">0s</span></div>
+          <div class="kpi-item">
+            <svg class="kpi-chart" viewBox="0 0 60 40" fill="none" stroke="var(--text-mid)">
+               <rect x="5" y="10" width="12" height="12" stroke-width="1.5" />
+               <rect x="23" y="10" width="12" height="12" stroke-width="1.5" />
+               <rect x="5" y="28" width="12" height="12" stroke-width="1.5" />
+               <rect x="23" y="28" width="12" height="12" stroke-width="1.5" />
+               <path d="M43 16 h12 M43 22 h7 M43 28 h12" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Format</span>
+            <span class="kpi-val" id="kpi-format">N/A</span>
+          </div>
+          
+          <div class="kpi-item">
+            <svg class="kpi-chart" viewBox="0 0 60 40" fill="none">
+               <path d="M5 30 Q 20 10, 35 25 T 65 15" stroke="var(--blue)" stroke-width="2" fill="none" />
+               <circle cx="20" cy="18" r="3" fill="var(--blue)" />
+               <circle cx="50" cy="20.5" r="3" fill="var(--blue)" />
+            </svg>
+            <span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg> Frames Extracted</span>
+            <span class="kpi-val" id="kpi-frames">0</span>
+          </div>
+          
+          <div class="kpi-item">
+            <svg class="kpi-chart" viewBox="0 0 60 40" fill="var(--text-mid)">
+               <rect x="10" y="20" width="4" height="15" rx="1" />
+               <rect x="20" y="12" width="4" height="23" rx="1" />
+               <rect x="30" y="25" width="4" height="10" rx="1" />
+               <rect x="40" y="8"  width="4" height="27" rx="1" />
+               <rect x="50" y="18" width="4" height="17" rx="1" />
+            </svg>
+            <span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Compute Time</span>
+            <span class="kpi-val" id="kpi-time">0s</span>
+          </div>
         </div>
 
-        <!-- PHASE 1: Tabbed Media Telemetry -->
+        <!-- Tabbed Media Telemetry -->
         <div class="media-panel" id="preview-wrapper">
           <div class="tabs-header">
             <button class="tab-btn active" data-target="tab-source">Source</button>
@@ -86,19 +116,16 @@ export function renderWorkspace() {
           <div class="media-content">
             <div class="scan-line"></div>
             
-            <!-- SOURCE TAB -->
             <div id="tab-source" class="tab-layer active">
               <img id="preview-img" style="display:none;" />
               <video id="video-preview" controls style="display:none;"></video>
             </div>
             
-            <!-- HEATMAP TAB -->
             <div id="tab-heatmap" class="tab-layer">
               <img id="heatmap-img" style="display:none;"/>
               <p id="heatmap-placeholder" style="font-family:var(--mono); color:var(--text-dim); font-size:11px;">HEATMAP NOT GENERATED</p>
             </div>
 
-            <!-- OVERLAY TAB -->
             <div id="tab-overlay" class="tab-layer">
               <img id="overlay-base-img" style="display:none;" />
               <video id="overlay-base-video" style="display:none;" muted></video>
@@ -107,7 +134,7 @@ export function renderWorkspace() {
           </div>
         </div>
 
-        <!-- 4. Export -->
+        <!-- Export -->
         <div class="export-panel">
           <button id="export-btn" class="secondary-btn">Export Forensic Report (.PDF)</button>
         </div>
