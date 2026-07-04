@@ -62,10 +62,7 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
 # Frame extraction
-# ---------------------------------------------------------------------------
-
 async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_frames=10):
     """Safely extracts frames using dynamic file suffix and converts to PIL Images."""
     file_suffix = Path(upload_file.filename).suffix.lower()
@@ -104,10 +101,7 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
 
     return frames
 
-
-# ---------------------------------------------------------------------------
 # Core analysis (shared by single + batch endpoints)
-# ---------------------------------------------------------------------------
 
 async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
     start_time = time.time()
@@ -173,11 +167,7 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     return result
 
-
-# ---------------------------------------------------------------------------
 # Routes
-# ---------------------------------------------------------------------------
-
 @app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
     logger.info(f"Analyzing asset: {file.filename}")
@@ -248,9 +238,7 @@ async def health():
     return {"status": "ok", "version": MODEL_VERSION}
 
 
-# ---------------------------------------------------------------------------
 # Static File Serving
-# ---------------------------------------------------------------------------
 
 # Point FastAPI to the folder where Vite is actually putting the files
 _static = Path(__file__).parent / "static"
@@ -261,6 +249,7 @@ if _static.exists():
     if _assets.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
+    
     # Serve the main HTML file at the root URL
     @app.get("/")
     async def serve_frontend():
