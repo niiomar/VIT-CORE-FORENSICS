@@ -164,7 +164,7 @@ function renderResult(data, filename) {
   
   // Face Status
   document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'None';
-  document.getElementById('stat-face-sub').textContent = data.face_detected ? 'Detected · 1 face' : 'No face found';
+  document.getElementById('stat-face-sub').textContent = data.face_detected ? 'Subject Detected' : 'No face found';
   
   // Face Quality
   document.getElementById('stat-quality').textContent = data.face_quality;
