@@ -1,55 +1,36 @@
-export function updateHistoryLayout(history = []) {
-  const historyList = document.getElementById('history-list');
-  const totalEl = document.getElementById('stat-total');
-  const realEl = document.getElementById('stat-real-count');
-  const fakeEl = document.getElementById('stat-fake-count');
+export function renderHistoryItem(item) {
+  const isFake = item.verdict === 'FAKE';
+  const cls = isFake ? 'fake' : 'real';
+  const colorVar = isFake ? 'var(--red)' : 'var(--green)';
 
-  if (!historyList) return;
-
-  const total = history.length;
-  const realCount = history.filter(
-    item => String(item.verdict).toUpperCase() === 'REAL'
-  ).length;
-  const fakeCount = history.filter(
-    item => String(item.verdict).toUpperCase() === 'FAKE'
-  ).length;
-
-  if (totalEl) totalEl.textContent = total;
-  if (realEl) realEl.textContent = realCount;
-  if (fakeEl) fakeEl.textContent = fakeCount;
-
-  if (total === 0) {
-    historyList.innerHTML = `
-      <div class="history-empty">
-        No analyses recorded
+  return `
+    <div class="hist-item ${cls}" data-hash="${item.file_sha256}">
+      <div class="hist-top">
+        <span class="hist-badge ${cls}">${item.verdict}</span>
+        <span class="hist-conf" style="color: ${colorVar}">${item.confidence}%</span>
       </div>
-    `;
-    return;
-  }
+      <div class="hist-bot">
+        <span class="hist-name" title="${item.filename}">${item.filename}</span>
+        <span class="hist-time">${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      </div>
+    </div>
+  `;
+}
 
-  historyList.innerHTML = history
-    .slice()
-    .reverse()
-    .map(entry => {
-      const verdict = entry.verdict || 'UNKNOWN';
-      const confidence = entry.confidence ?? 0;
-      const filename = entry.filename || 'unnamed-file';
-
-      return `
-        <div class="history-item">
-          <div class="history-item-top">
-            <span class="history-file">${filename}</span>
-            <span class="history-verdict ${verdict.toLowerCase()}">
-              ${verdict}
-            </span>
-          </div>
-
-          <div class="history-item-bottom">
-            <span>${confidence}%</span>
-            <span>${new Date(entry.timestamp).toLocaleString()}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
+export function updateHistory(sessionHistory) {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+  
+  list.innerHTML = '';
+  let fakes = 0; let reals = 0;
+  
+  sessionHistory.forEach(item => {
+    const isFake = item.verdict === 'FAKE';
+    isFake ? fakes++ : reals++;
+    list.innerHTML += renderHistoryItem(item);
+  });
+  
+  document.getElementById('stat-total').textContent = sessionHistory.length;
+  document.getElementById('stat-real-count').textContent = reals;
+  document.getElementById('stat-fake-count').textContent = fakes;
 }
