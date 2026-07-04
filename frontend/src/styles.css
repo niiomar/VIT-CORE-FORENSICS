@@ -147,7 +147,7 @@ body {
 @keyframes spin { 100% { transform: rotate(360deg); } }
 #idle-state p { font-family: var(--mono); color: var(--text-dim); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; }
 
-#result-state { display: none; width: 100%; max-width: 1050px; animation: fadeIn 0.4s ease; flex-direction: column; }
+#result-state { display: none; width: 100%; max-width: 1050px; animation: fadeIn 0.4s ease; flex-direction: column; gap: 20px; }
 #result-state.visible { display: flex; }
 
 /* Banners */
@@ -179,11 +179,12 @@ body {
 
 .exec-divider { width: 1px; align-self: stretch; background: var(--border); }
 
-.exec-right { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.tm-item { display: flex; flex-direction: column; justify-content: center; gap: 6px; background: var(--surface2); padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+/* GRID REBALANCE: Middle column (1.15fr) gets slightly more breathing room, font-size dropped to 12px */
+.exec-right { flex: 1; display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 14px; }
+.tm-item { display: flex; flex-direction: column; justify-content: center; gap: 6px; background: var(--surface2); padding: 14px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .tm-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tm-label svg { width: 12px; height: 12px; stroke: var(--text-mid); flex-shrink: 0; }
-.tm-val { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-val { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tm-sub { font-size: 10px; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; display: inline-table; width: max-content; }
 
 /* Full-Width KPI Strip */
