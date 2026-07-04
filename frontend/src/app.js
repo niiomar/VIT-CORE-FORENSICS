@@ -31,7 +31,6 @@ let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
 
-
 // Database Sync function handling explicit backend audit history
 async function syncDatabaseHistory() {
   try {
@@ -79,7 +78,12 @@ function handleFile(file) {
   
   idleState.style.display = 'flex'; 
   resultState.classList.remove('visible');
-  gaugeFill.style.strokeDashoffset = 326.7;
+  gaugeFill.style.strokeDashoffset = 295.3;
+  
+  // Reset Dynamic Subtext
+  document.getElementById('stat-score-sub').textContent = 'Pending';
+  document.getElementById('stat-face-sub').textContent = 'Pending';
+  document.getElementById('stat-qual-sub').textContent = 'Pending';
 }
 
 function setLoading(on) {
@@ -106,9 +110,10 @@ analyzeBtn.addEventListener('click', async () => {
   heatmapWrapper.classList.add('scanning');
   
   setLoading(true);
-  gaugeFill.style.strokeDashoffset = 326.7; 
+  gaugeFill.style.strokeDashoffset = 295.3; 
   document.getElementById('low-conf-warning').style.display = 'none';
   document.getElementById('low-qual-warning').style.display = 'none';
+  document.getElementById('warn-sys-error').classList.remove('visible');
 
   const fd = new FormData();
   fd.append('file', selectedFile);
@@ -131,7 +136,8 @@ analyzeBtn.addEventListener('click', async () => {
     updateHistory(sessionHistory);
     
   } catch (err) {
-    alert("Analysis failed: " + err.message);
+    document.getElementById('warn-sys-text').textContent = err.message;
+    document.getElementById('warn-sys-error').classList.add('visible');
     previewWrapper.classList.remove('scanning');
     heatmapWrapper.classList.remove('scanning');
   } finally {
@@ -149,13 +155,22 @@ function renderResult(data, filename) {
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
-  setTimeout(() => { gaugeFill.style.strokeDashoffset = 326.7 - (326.7 * (data.confidence / 100)); }, 100);
+  setTimeout(() => { gaugeFill.style.strokeDashoffset = 295.3 - (295.3 * (data.confidence / 100)); }, 100);
 
+  // Probability
   document.getElementById('stat-score').textContent = data.probability.toFixed(4);
   document.getElementById('stat-score').style.color = isFake ? 'var(--red)' : 'var(--green)';
-  document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'No Face Found';
-  document.getElementById('stat-quality').textContent = data.face_quality;
+  document.getElementById('stat-score-sub').textContent = `${(data.probability * 100).toFixed(1)}% fake probability`;
   
+  // Face Status
+  document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'None';
+  document.getElementById('stat-face-sub').textContent = data.face_detected ? 'Detected · 1 face' : 'No face found';
+  
+  // Face Quality
+  document.getElementById('stat-quality').textContent = data.face_quality;
+  document.getElementById('stat-qual-sub').textContent = data.face_quality === 'N/A' ? 'Not evaluated' : 'Frame-level evaluation';
+  
+  // KPIs
   document.getElementById('kpi-format').textContent = data.type.toUpperCase();
   document.getElementById('kpi-frames').textContent = data.frames_analyzed;
   document.getElementById('kpi-time').textContent = `${data.processing_time_sec}s`;
@@ -175,7 +190,7 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
     updateHistory(sessionHistory);
     idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
     analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
-    gaugeFill.style.strokeDashoffset = 326.7;
+    gaugeFill.style.strokeDashoffset = 295.3;
   }
 });
 
