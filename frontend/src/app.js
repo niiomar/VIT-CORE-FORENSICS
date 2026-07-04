@@ -3,6 +3,7 @@ import { renderSidebar } from './components/sidebar.js';
 import { renderWorkspace } from './components/workspace.js';
 import { updateHistory } from './components/history.js';
 
+
 // 1. INJECT CUSTOM HTML SHELL
 document.getElementById('app').innerHTML = `
   <div class="layout">
@@ -24,6 +25,7 @@ const heatmapImg = document.getElementById('heatmap-img');
 const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
+
 
 // 3. STATE & INIT
 let selectedFile = null;
