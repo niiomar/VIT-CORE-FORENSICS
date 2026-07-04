@@ -53,6 +53,17 @@ export function renderSidebar() {
         </div>
         <button class="clear-history" id="clear-history-btn">CLEAR</button>
       </div>
+      
+      <!-- PHASE 3: Embedded Controls -->
+      <div class="history-controls">
+        <input type="text" id="history-search" class="history-search" placeholder="Search filenames..." autocomplete="off"/>
+        <div class="history-filters">
+            <button class="filter-chip active" data-filter="ALL">ALL</button>
+            <button class="filter-chip" data-filter="REAL">REAL</button>
+            <button class="filter-chip" data-filter="FAKE">FAKE</button>
+        </div>
+      </div>
+      
       <div class="history-list" id="history-list"></div>
     </aside>
   `;
