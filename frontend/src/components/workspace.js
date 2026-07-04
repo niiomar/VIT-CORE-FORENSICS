@@ -2,7 +2,6 @@ export function renderWorkspace() {
   return `
     <main class="main-view" id="main-view">
 
-      <!-- IDLE -->
       <div id="idle-state">
         <div class="idle-shield">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -10,26 +9,20 @@ export function renderWorkspace() {
         <p>AWAITING PROVENANCE TELEMETRY</p>
       </div>
 
-      <!-- RESULT -->
       <div id="result-state">
-
-        <!-- Warning banners -->
         <div class="warning-banner warn-red" id="warn-sys-error">
           <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
           <span id="warn-sys-text"></span>
         </div>
-        
         <div class="warning-banner warn-amber" id="low-conf-warning">
           <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
           AMBIGUOUS TELEMETRY — Model confidence is low. Manual review recommended.
         </div>
-        
         <div class="warning-banner warn-red" id="low-qual-warning">
           <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
           POOR EVIDENCE QUALITY — The detected face is highly degraded or blurry.
         </div>
 
-        <!-- Executive Panel -->
         <div class="executive-panel">
           <div class="exec-left">
             <div class="trust-ring-box">
@@ -69,7 +62,6 @@ export function renderWorkspace() {
           </div>
         </div>
 
-        <!-- PHASE 2: Premium KPI Strip with Micro-charts -->
         <div class="kpi-strip">
           <div class="kpi-item">
             <svg class="kpi-chart" viewBox="0 0 60 40" fill="none" stroke="var(--text-mid)">
@@ -106,7 +98,6 @@ export function renderWorkspace() {
           </div>
         </div>
 
-        <!-- Tabbed Media Telemetry -->
         <div class="media-panel" id="preview-wrapper">
           <div class="tabs-header">
             <button class="tab-btn active" data-target="tab-source">Source</button>
@@ -115,17 +106,14 @@ export function renderWorkspace() {
           </div>
           <div class="media-content">
             <div class="scan-line"></div>
-            
             <div id="tab-source" class="tab-layer active">
               <img id="preview-img" style="display:none;" />
               <video id="video-preview" controls style="display:none;"></video>
             </div>
-            
             <div id="tab-heatmap" class="tab-layer">
               <img id="heatmap-img" style="display:none;"/>
               <p id="heatmap-placeholder" style="font-family:var(--mono); color:var(--text-dim); font-size:11px;">HEATMAP NOT GENERATED</p>
             </div>
-
             <div id="tab-overlay" class="tab-layer">
               <img id="overlay-base-img" style="display:none;" />
               <video id="overlay-base-video" style="display:none;" muted></video>
@@ -134,7 +122,6 @@ export function renderWorkspace() {
           </div>
         </div>
 
-        <!-- Export -->
         <div class="export-panel">
           <button id="export-btn" class="secondary-btn">Export Forensic Report (.PDF)</button>
         </div>
