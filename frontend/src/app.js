@@ -38,13 +38,14 @@ let sessionHistory = [];
 let loadingInterval = null;
 let objectUrlCache = null; 
 
-// PHASE 3: Filter State
 let activeFilter = 'ALL';
 let searchQuery = '';
 
+const BASE_URL = window.location.port === '5173' ? 'http://127.0.0.1:8001' : '';
+
 async function syncDatabaseHistory() {
   try {
-    const res = await fetch('/api/v1/history', {
+    const res = await fetch(`${BASE_URL}/api/v1/history`, {
       headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
     });
     if (res.ok) {
@@ -58,7 +59,6 @@ async function syncDatabaseHistory() {
 }
 syncDatabaseHistory();
 
-// PHASE 3: Filter Engine
 function applyHistoryFilters() {
   let filtered = sessionHistory;
   
@@ -75,8 +75,6 @@ function applyHistoryFilters() {
 }
 
 // 4. EVENT LISTENERS
-
-// Search & Filtering Listeners
 document.getElementById('history-search').addEventListener('input', (e) => {
     searchQuery = e.target.value;
     applyHistoryFilters();
@@ -101,7 +99,6 @@ dropZone.addEventListener('drop', e => {
   handleFile(e.dataTransfer.files[0]); 
 });
 
-// Tabbed Switching Logic
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -113,7 +110,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-// Click-to-Reload History
 historyList.addEventListener('click', (e) => {
   const item = e.target.closest('.hist-item');
   if (!item) return;
@@ -140,7 +136,6 @@ historyList.addEventListener('click', (e) => {
     renderResult(entry, entry.filename);
   }
 });
-
 
 function handleFile(file) {
   if (!file) return;
@@ -173,7 +168,7 @@ function handleFile(file) {
   
   idleState.style.display = 'flex'; 
   resultState.classList.remove('visible');
-  gaugeFill.style.strokeDashoffset = 439.8;
+  gaugeFill.style.strokeDashoffset = 326.7;
   
   document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
   document.getElementById('stat-score-sub').textContent = 'Pending';
@@ -206,7 +201,7 @@ analyzeBtn.addEventListener('click', async () => {
   document.querySelector('[data-target="tab-source"]').click();
   
   setLoading(true);
-  gaugeFill.style.strokeDashoffset = 439.8; 
+  gaugeFill.style.strokeDashoffset = 326.7; 
   document.getElementById('low-conf-warning').style.display = 'none';
   document.getElementById('low-qual-warning').style.display = 'none';
   document.getElementById('warn-sys-error').classList.remove('visible');
@@ -216,7 +211,7 @@ analyzeBtn.addEventListener('click', async () => {
   const explain = document.getElementById('explain-toggle').checked;
 
   try {
-    const res = await fetch(`/api/v1/analyze?explain=${explain}`, { 
+    const res = await fetch(`${BASE_URL}/api/v1/analyze?explain=${explain}`, { 
       method: 'POST', 
       body: fd, 
       headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
@@ -254,7 +249,7 @@ function renderResult(data, filename) {
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
-  setTimeout(() => { gaugeFill.style.strokeDashoffset = 439.8 - (439.8 * (data.confidence / 100)); }, 100);
+  setTimeout(() => { gaugeFill.style.strokeDashoffset = 326.7 - (326.7 * (data.confidence / 100)); }, 100);
 
   document.getElementById('stat-score').textContent = data.probability.toFixed(4);
   document.getElementById('stat-score').style.color = isFake ? 'var(--red)' : 'var(--green)';
@@ -294,7 +289,7 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
     applyHistoryFilters();
     idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
     analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
-    gaugeFill.style.strokeDashoffset = 439.8;
+    gaugeFill.style.strokeDashoffset = 326.7;
   }
 });
 
