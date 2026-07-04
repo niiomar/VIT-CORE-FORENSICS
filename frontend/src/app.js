@@ -38,6 +38,10 @@ let sessionHistory = [];
 let loadingInterval = null;
 let objectUrlCache = null; 
 
+// PHASE 3: Filter State
+let activeFilter = 'ALL';
+let searchQuery = '';
+
 async function syncDatabaseHistory() {
   try {
     const res = await fetch('/api/v1/history', {
@@ -46,7 +50,7 @@ async function syncDatabaseHistory() {
     if (res.ok) {
       const data = await res.json();
       sessionHistory = data.entries.reverse();
-      updateHistory(sessionHistory);
+      applyHistoryFilters();
     }
   } catch (err) {
     console.error("Database sync failed:", err);
@@ -54,7 +58,39 @@ async function syncDatabaseHistory() {
 }
 syncDatabaseHistory();
 
+// PHASE 3: Filter Engine
+function applyHistoryFilters() {
+  let filtered = sessionHistory;
+  
+  if (activeFilter !== 'ALL') {
+      filtered = filtered.filter(item => item.verdict === activeFilter);
+  }
+  
+  if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => item.filename.toLowerCase().includes(q));
+  }
+  
+  updateHistory(filtered, sessionHistory);
+}
+
 // 4. EVENT LISTENERS
+
+// Search & Filtering Listeners
+document.getElementById('history-search').addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    applyHistoryFilters();
+});
+
+document.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        activeFilter = e.target.dataset.filter;
+        applyHistoryFilters();
+    });
+});
+
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -192,7 +228,7 @@ analyzeBtn.addEventListener('click', async () => {
     renderResult(data, selectedFile.name);
     
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
-    updateHistory(sessionHistory);
+    applyHistoryFilters();
     
     setTimeout(() => {
         const firstLog = document.querySelector('.hist-item');
@@ -255,7 +291,7 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
   if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {
     sessionHistory = []; 
-    updateHistory(sessionHistory);
+    applyHistoryFilters();
     idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
     analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
     gaugeFill.style.strokeDashoffset = 439.8;
