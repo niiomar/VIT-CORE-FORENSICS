@@ -4,13 +4,13 @@ from pathlib import Path
 env_path = Path(__file__).parent / ".env"
 loaded = load_dotenv(dotenv_path=env_path)
 print(f"[Config] .env loaded: {loaded} (path: {env_path})")
+
 import logging
 import time
 import os
 import cv2
 import tempfile
 from contextlib import asynccontextmanager
-from pathlib import Path
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ViT-CORE-FORENSICS API", version=MODEL_VERSION, lifespan=lifespan)
 
-# Security: explicit origins and explicit headers.
+# Security: explicit origins and explicit headers — no wildcards.
 CORS_ORIGINS = [o.strip() for o in os.getenv(
     "CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
 ).split(",") if o.strip()]
@@ -51,7 +51,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-KEY"],
 )
 
+
+# ---------------------------------------------------------------------------
 # Frame extraction
+# ---------------------------------------------------------------------------
+
 async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_frames=10):
     """Safely extracts frames using dynamic file suffix and converts to PIL Images."""
     file_suffix = Path(upload_file.filename).suffix.lower()
@@ -90,7 +94,11 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
 
     return frames
 
+
+# ---------------------------------------------------------------------------
 # Core analysis (shared by single + batch endpoints)
+# ---------------------------------------------------------------------------
+
 async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
     start_time = time.time()
     filename_lower = (file.filename or "").lower()
@@ -125,9 +133,9 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     faces_found = any(f["face_detected"] for f in frame_data)
 
-    
-    # Conservative aggregation: report the WORST quality seen across all frames where a face was detected, not just the first one.
-    # A single blurry frame in an otherwise sharp video should still be flagged.
+    # Conservative aggregation: report the WORST quality seen across all
+    # frames where a face was detected, not just the first one. A single
+    # blurry frame in an otherwise sharp video should still be flagged.
     quality_statuses = [f["quality"]["status"] for f in frame_data if f["face_detected"]]
     if quality_statuses:
         from model import QUALITY_RANK
@@ -154,8 +162,12 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
     result["file_sha256"] = file_hash
 
     return result
-    
+
+
+# ---------------------------------------------------------------------------
 # Routes
+# ---------------------------------------------------------------------------
+
 @app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
     logger.info(f"Analyzing asset: {file.filename}")
@@ -226,9 +238,25 @@ async def health():
     return {"status": "ok", "version": MODEL_VERSION}
 
 
-app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+# ---------------------------------------------------------------------------
+# Static File Serving
+# ---------------------------------------------------------------------------
 
+# Point FastAPI to the folder where Vite is actually putting the files
+_static = Path(__file__).parent / "static"
 
-@app.get("/")
-async def serve_frontend():
-    return FileResponse("static/index.html")
+if _static.exists():
+    # Mount the /assets folder so JS and CSS load correctly
+    _assets = _static / "assets"
+    if _assets.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    # Serve the main HTML file at the root URL
+    @app.get("/")
+    async def serve_frontend():
+        return FileResponse(str(_static / "index.html"))
+else:
+    logger.warning(
+        f"Frontend build directory not found at {_static}. "
+        "Check your Vite configuration."
+    )
