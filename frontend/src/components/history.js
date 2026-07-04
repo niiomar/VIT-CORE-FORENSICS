@@ -1,17 +1,16 @@
 export function renderHistoryItem(item) {
   const isFake = item.verdict === 'FAKE';
   const cls = isFake ? 'fake' : 'real';
-  const colorVar = isFake ? 'var(--red)' : 'var(--green)';
 
   return `
-    <div class="hist-item ${cls}" data-hash="${item.file_sha256}">
-      <div class="hist-top">
+    <div class="hist-item ${cls}" data-hash="${item.file_sha256 || ''}">
+      <div class="hi-top">
         <span class="hist-badge ${cls}">${item.verdict}</span>
-        <span class="hist-conf" style="color: ${colorVar}">${item.confidence}%</span>
+        <span class="hi-conf">${item.confidence}%</span>
       </div>
-      <div class="hist-bot">
-        <span class="hist-name" title="${item.filename}">${item.filename}</span>
-        <span class="hist-time">${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      <div class="hi-bot">
+        <span class="hi-name" title="${item.filename}">${item.filename}</span>
+        <span class="hi-time">${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
     </div>
   `;
