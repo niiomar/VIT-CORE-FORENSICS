@@ -3,7 +3,6 @@ import { renderSidebar } from './components/sidebar.js';
 import { renderWorkspace } from './components/workspace.js';
 import { updateHistory } from './components/history.js';
 
-
 // 1. INJECT CUSTOM HTML SHELL
 document.getElementById('app').innerHTML = `
   <div class="layout">
@@ -17,23 +16,28 @@ const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const analyzeBtn = document.getElementById('analyze-btn');
 const previewWrapper = document.getElementById('preview-wrapper');
-const heatmapWrapper = document.getElementById('heatmap-wrapper');
+
 const previewImg = document.getElementById('preview-img');
 const videoPreview = document.getElementById('video-preview');
 const heatmapImg = document.getElementById('heatmap-img');
+const heatmapPlaceholder = document.getElementById('heatmap-placeholder');
+
+const overlayBaseImg = document.getElementById('overlay-base-img');
+const overlayBaseVideo = document.getElementById('overlay-base-video');
+const overlayHeat = document.getElementById('overlay-heat');
 
 const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
-
+const historyList = document.getElementById('history-list');
 
 // 3. STATE & INIT
 let selectedFile = null;
 let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
+let objectUrlCache = null; // Cache to handle tab switching
 
-// Database Sync function handling explicit backend audit history
 async function syncDatabaseHistory() {
   try {
     const res = await fetch('/api/v1/history', {
@@ -41,7 +45,7 @@ async function syncDatabaseHistory() {
     });
     if (res.ok) {
       const data = await res.json();
-      sessionHistory = data.entries.reverse(); // Reverse so newest pushes appropriately
+      sessionHistory = data.entries.reverse();
       updateHistory(sessionHistory);
     }
   } catch (err) {
@@ -61,28 +65,85 @@ dropZone.addEventListener('drop', e => {
   handleFile(e.dataTransfer.files[0]); 
 });
 
+// PHASE 1: Tabbed Switching Logic
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-layer').forEach(l => l.classList.remove('active'));
+    
+    const targetId = e.target.dataset.target;
+    e.target.classList.add('active');
+    document.getElementById(targetId).classList.add('active');
+  });
+});
+
+// PHASE 1: Click-to-Reload History
+historyList.addEventListener('click', (e) => {
+  const item = e.target.closest('.hist-item');
+  if (!item) return;
+
+  const hash = item.dataset.hash;
+  const entry = sessionHistory.find(x => x.file_sha256 === hash);
+  
+  if (entry) {
+    // Clear styling on all history items, highlight clicked
+    document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
+    item.classList.add('active-log');
+
+    // Revoke old object URL if we have one to prevent leaks
+    if (objectUrlCache) {
+      URL.revokeObjectURL(objectUrlCache);
+      objectUrlCache = null;
+    }
+    
+    // UI Resets for Database Load
+    idleState.style.display = 'none';
+    resultState.classList.add('visible');
+    previewImg.style.display = 'none';
+    videoPreview.style.display = 'none';
+    overlayBaseImg.style.display = 'none';
+    overlayBaseVideo.style.display = 'none';
+    
+    renderResult(entry, entry.filename);
+  }
+});
+
+
 function handleFile(file) {
   if (!file) return;
   selectedFile = file;
   analyzeBtn.disabled = false;
   analyzeBtn.textContent = `ANALYZE: ${file.name.length > 20 ? file.name.slice(0,18)+'…' : file.name}`;
+  
+  if (objectUrlCache) URL.revokeObjectURL(objectUrlCache);
+  objectUrlCache = URL.createObjectURL(file);
+  
   const isVid = file.type.startsWith('video/');
+  
+  // Reset media elements
+  [previewImg, videoPreview, overlayBaseImg, overlayBaseVideo].forEach(el => el.style.display = 'none');
+
   if (isVid) { 
-    videoPreview.src = URL.createObjectURL(file); 
+    videoPreview.src = objectUrlCache; 
     videoPreview.style.display = 'block'; 
-    previewImg.style.display = 'none'; 
+    overlayBaseVideo.src = objectUrlCache;
+    overlayBaseVideo.style.display = 'block';
   } else { 
-    previewImg.src = URL.createObjectURL(file); 
+    previewImg.src = objectUrlCache; 
     previewImg.style.display = 'block'; 
-    videoPreview.style.display = 'none'; 
+    overlayBaseImg.src = objectUrlCache;
+    overlayBaseImg.style.display = 'block';
   }
-  heatmapImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  
+  heatmapImg.style.display = 'none';
+  overlayHeat.style.display = 'none';
+  heatmapPlaceholder.style.display = 'block';
   
   idleState.style.display = 'flex'; 
   resultState.classList.remove('visible');
-  gaugeFill.style.strokeDashoffset = 295.3;
+  gaugeFill.style.strokeDashoffset = 439.8;
   
-  // Reset Dynamic Subtext
+  document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
   document.getElementById('stat-score-sub').textContent = 'Pending';
   document.getElementById('stat-face-sub').textContent = 'Pending';
   document.getElementById('stat-qual-sub').textContent = 'Pending';
@@ -109,10 +170,12 @@ analyzeBtn.addEventListener('click', async () => {
   idleState.style.display = 'none';
   resultState.classList.add('visible');
   previewWrapper.classList.add('scanning');
-  heatmapWrapper.classList.add('scanning');
+  
+  // Ensure we switch to Source Tab when analyzing starts
+  document.querySelector('[data-target="tab-source"]').click();
   
   setLoading(true);
-  gaugeFill.style.strokeDashoffset = 295.3; 
+  gaugeFill.style.strokeDashoffset = 439.8; 
   document.getElementById('low-conf-warning').style.display = 'none';
   document.getElementById('low-qual-warning').style.display = 'none';
   document.getElementById('warn-sys-error').classList.remove('visible');
@@ -131,17 +194,21 @@ analyzeBtn.addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.detail);
     
     previewWrapper.classList.remove('scanning');
-    heatmapWrapper.classList.remove('scanning');
     renderResult(data, selectedFile.name);
     
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
     updateHistory(sessionHistory);
     
+    // Highlight the newest run
+    setTimeout(() => {
+        const firstLog = document.querySelector('.hist-item');
+        if(firstLog) firstLog.classList.add('active-log');
+    }, 100);
+    
   } catch (err) {
     document.getElementById('warn-sys-text').textContent = err.message;
     document.getElementById('warn-sys-error').classList.add('visible');
     previewWrapper.classList.remove('scanning');
-    heatmapWrapper.classList.remove('scanning');
   } finally {
     setLoading(false);
   }
@@ -157,22 +224,19 @@ function renderResult(data, filename) {
   document.getElementById('gauge-conf').textContent = `${data.confidence}%`;
   
   gaugeFill.className.baseVal = `gauge-fill ${cls}`;
-  setTimeout(() => { gaugeFill.style.strokeDashoffset = 295.3 - (295.3 * (data.confidence / 100)); }, 100);
+  // 439.8 is 2 * pi * 70 (the radius of the newly enlarged gauge)
+  setTimeout(() => { gaugeFill.style.strokeDashoffset = 439.8 - (439.8 * (data.confidence / 100)); }, 100);
 
-  // Probability
   document.getElementById('stat-score').textContent = data.probability.toFixed(4);
   document.getElementById('stat-score').style.color = isFake ? 'var(--red)' : 'var(--green)';
   document.getElementById('stat-score-sub').textContent = `${(data.probability * 100).toFixed(1)}% fake probability`;
   
-  // Face Status
   document.getElementById('stat-face').textContent = data.face_detected ? 'MTCNN Extract' : 'None';
   document.getElementById('stat-face-sub').textContent = data.face_detected ? 'Subject Detected' : 'No face found';
   
-  // Face Quality
   document.getElementById('stat-quality').textContent = data.face_quality;
   document.getElementById('stat-qual-sub').textContent = data.face_quality === 'N/A' ? 'Not evaluated' : 'Frame-level evaluation';
   
-  // KPIs
   document.getElementById('kpi-format').textContent = data.type.toUpperCase();
   document.getElementById('kpi-frames').textContent = data.frames_analyzed;
   document.getElementById('kpi-time').textContent = `${data.processing_time_sec}s`;
@@ -181,7 +245,16 @@ function renderResult(data, filename) {
   if (data.face_quality === "Poor") document.getElementById('low-qual-warning').style.display = 'flex';
 
   if (data.explainability_maps && data.explainability_maps.length > 0) {
-      heatmapImg.src = `data:image/jpeg;base64,${data.explainability_maps[0]}`;
+      const b64 = `data:image/jpeg;base64,${data.explainability_maps[0]}`;
+      heatmapImg.src = b64;
+      overlayHeat.src = b64;
+      heatmapImg.style.display = 'block';
+      overlayHeat.style.display = 'block';
+      heatmapPlaceholder.style.display = 'none';
+  } else {
+      heatmapImg.style.display = 'none';
+      overlayHeat.style.display = 'none';
+      heatmapPlaceholder.style.display = 'block';
   }
 }
 
@@ -192,7 +265,7 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
     updateHistory(sessionHistory);
     idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
     analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
-    gaugeFill.style.strokeDashoffset = 295.3;
+    gaugeFill.style.strokeDashoffset = 439.8;
   }
 });
 
