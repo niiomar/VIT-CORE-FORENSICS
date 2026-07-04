@@ -29,13 +29,13 @@ export function renderWorkspace() {
           POOR EVIDENCE QUALITY — The detected face is highly degraded or blurry.
         </div>
 
-        <!-- 1. Executive Panel -->
+        <!-- PHASE 1: Enlarged Executive Panel -->
         <div class="executive-panel">
           <div class="exec-left">
             <div class="trust-ring-box">
-              <svg class="gauge-svg" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="47" class="gauge-bg"></circle>
-                <circle cx="60" cy="60" r="47" id="gauge-fill" class="gauge-fill"></circle>
+              <svg class="gauge-svg" viewBox="0 0 160 160">
+                <circle cx="80" cy="80" r="70" class="gauge-bg"></circle>
+                <circle cx="80" cy="80" r="70" id="gauge-fill" class="gauge-fill"></circle>
               </svg>
               <div class="gauge-text">
                 <span class="gauge-val" id="gauge-conf">0%</span>
@@ -76,22 +76,33 @@ export function renderWorkspace() {
           <div class="kpi-item"><span class="kpi-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Compute Time</span><span class="kpi-val" id="kpi-time">0s</span></div>
         </div>
 
-        <!-- 3. Media Telemetry -->
-        <div class="media-grid">
-          <div class="media-panel" id="preview-wrapper">
-            <div class="media-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Evidence Telemetry</div>
-            <div class="media-content">
-              <div class="scan-line"></div>
+        <!-- PHASE 1: Tabbed Media Telemetry -->
+        <div class="media-panel" id="preview-wrapper">
+          <div class="tabs-header">
+            <button class="tab-btn active" data-target="tab-source">Source</button>
+            <button class="tab-btn" data-target="tab-heatmap">Heatmap</button>
+            <button class="tab-btn" data-target="tab-overlay">Overlay</button>
+          </div>
+          <div class="media-content">
+            <div class="scan-line"></div>
+            
+            <!-- SOURCE TAB -->
+            <div id="tab-source" class="tab-layer active">
               <img id="preview-img" style="display:none;" />
               <video id="video-preview" controls style="display:none;"></video>
             </div>
-          </div>
+            
+            <!-- HEATMAP TAB -->
+            <div id="tab-heatmap" class="tab-layer">
+              <img id="heatmap-img" style="display:none;"/>
+              <p id="heatmap-placeholder" style="font-family:var(--mono); color:var(--text-dim); font-size:11px;">HEATMAP NOT GENERATED</p>
+            </div>
 
-          <div class="media-panel" id="heatmap-wrapper">
-            <div class="media-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg> Attention Rollout (ViT)</div>
-            <div class="media-content">
-              <div class="scan-line"></div>
-              <img id="heatmap-img" />
+            <!-- OVERLAY TAB -->
+            <div id="tab-overlay" class="tab-layer">
+              <img id="overlay-base-img" style="display:none;" />
+              <video id="overlay-base-video" style="display:none;" muted></video>
+              <img id="overlay-heat" class="overlay-heat" style="display:none;" />
             </div>
           </div>
         </div>
