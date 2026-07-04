@@ -38,7 +38,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ViT-CORE-FORENSICS API", version=MODEL_VERSION, lifespan=lifespan)
 
-# Security: explicit origins and explicit headers — no wildcards.
+
+# Security: explicit origins and explicit headers.
 CORS_ORIGINS = [o.strip() for o in os.getenv(
     "CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
 ).split(",") if o.strip()]
@@ -52,10 +53,7 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
 # Frame extraction
-# ---------------------------------------------------------------------------
-
 async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_frames=10):
     """Safely extracts frames using dynamic file suffix and converts to PIL Images."""
     file_suffix = Path(upload_file.filename).suffix.lower()
@@ -95,10 +93,7 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
     return frames
 
 
-# ---------------------------------------------------------------------------
 # Core analysis (shared by single + batch endpoints)
-# ---------------------------------------------------------------------------
-
 async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
     start_time = time.time()
     filename_lower = (file.filename or "").lower()
@@ -164,10 +159,7 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
     return result
 
 
-# ---------------------------------------------------------------------------
 # Routes
-# ---------------------------------------------------------------------------
-
 @app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
     logger.info(f"Analyzing asset: {file.filename}")
@@ -238,9 +230,7 @@ async def health():
     return {"status": "ok", "version": MODEL_VERSION}
 
 
-# ---------------------------------------------------------------------------
 # Static File Serving
-# ---------------------------------------------------------------------------
 
 # Point FastAPI to the folder where Vite is actually putting the files
 _static = Path(__file__).parent / "static"
