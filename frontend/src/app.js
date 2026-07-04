@@ -31,6 +31,7 @@ let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
 
+
 // Database Sync function handling explicit backend audit history
 async function syncDatabaseHistory() {
   try {
