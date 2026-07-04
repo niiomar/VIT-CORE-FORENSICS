@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap');
 
-/* ── Design Tokens ──────────────────────────────────────────────────────── */
+/* Design Tokens */
 :root {
   --bg:          #05070a;
   --surface:     #0d1117;
@@ -26,7 +26,7 @@
   --radius-sm:   4px;
 }
 
-/* ── Reset & Base ───────────────────────────────────────────────────────── */
+/* Reset & Base */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100vw; overflow: hidden; }
 
@@ -41,11 +41,11 @@ body {
 #app { height: 100vh; width: 100vw; }
 .layout { display: grid; grid-template-columns: 360px 1fr; height: 100%; width: 100%; }
 
-/* ── Animations ─────────────────────────────────────────────────────────── */
+/* Animations */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scanDown { 0% { top: 0; } 100% { top: 100%; } }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────────  */
+/* Sidebar */
 .sidebar {
   background: var(--surface); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; padding: 24px; z-index: 10; height: 100vh; overflow-y: auto;
@@ -71,7 +71,7 @@ body {
 .stat-real { color: var(--green) !important; }
 .stat-fake { color: var(--red) !important; }
 
-/* Evidence Locker (1% Polish: More padding) */
+/* Evidence Locker */
 .evidence-locker {
   position: relative; border-radius: var(--radius); padding: 32px 16px; text-align: center; cursor: pointer;
   background: var(--bg); margin-bottom: 20px; transition: 0.2s; flex-shrink: 0; border: 1px dashed var(--border);
@@ -106,7 +106,7 @@ body {
 .action-btn:disabled { background: var(--bg); color: var(--text-dim); cursor: not-allowed; border: 1px solid var(--border); }
 .action-btn:not(:disabled):hover { background: #408df7; }
 
-/* History (1% Polish: Vertical Alignment) */
+/* History */
 .history-header { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 12px; flex-shrink: 0; }
 .clear-btn { background: none; border: none; color: var(--text-dim); font-family: inherit; cursor: pointer; transition: .2s; }
 .clear-btn:hover { color: var(--red); }
@@ -136,7 +136,7 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-/* ── Main Workspace ─────────────────────────────────────────────────────── */
+/* Main Workspace */
 .main-view { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px; overflow-y: auto; position: relative; }
 
 #idle-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; opacity: 1; transition: .3s; margin: auto; }
@@ -177,7 +177,7 @@ body {
 
 .exec-divider { width: 1px; align-self: stretch; background: var(--border); }
 
-/* 1% Polish: Grid layout tuning so labels never wrap */
+/* Grid layout tuning so labels never wrap */
 .exec-right { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .tm-item { display: flex; flex-direction: column; gap: 4px; background: var(--bg); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .tm-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -192,7 +192,7 @@ body {
 .kpi-label svg { width: 12px; height: 12px; stroke: var(--text-mid); flex-shrink: 0; }
 .kpi-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text-hi); }
 
-/* Media Telemetry (1% Polish: Strict 16/9 Aspect Ratio constraint) */
+/* Media Telemetry */
 .media-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .media-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
 .media-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--text-mid); text-transform: uppercase; letter-spacing: 1px; }
