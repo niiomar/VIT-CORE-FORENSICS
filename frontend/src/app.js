@@ -117,6 +117,7 @@ let selectedFile = null;
 let currentReport = null;
 let sessionHistory = [];
 
+
 // Fetch true audit logs from the Python database
 async function syncDatabaseHistory() {
   try {
@@ -125,6 +126,7 @@ async function syncDatabaseHistory() {
     });
     if (res.ok) {
       const data = await res.json();
+      
       // Reverse the array so that the existing renderHistory() logic correctly pushes 
       // the newest items to the top of the list
       sessionHistory = data.entries.reverse();
@@ -136,6 +138,7 @@ async function syncDatabaseHistory() {
 }
 
 syncDatabaseHistory();
+
 
 // 4. EVENT LISTENERS
 dropZone.addEventListener('click', () => fileInput.click());
