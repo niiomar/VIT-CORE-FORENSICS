@@ -21,6 +21,7 @@ from model import analyze_frame, get_models
 from auth import verify_api_key
 import audit
 
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
