@@ -52,7 +52,6 @@ def _connect():
 
 _init_db()
 
-
 def sha256_of_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
