@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap');
 
-/* Design Tokens */
+/* Global Design Tokens & Variables */
+/* Defines the forensic dark mode palette, typography, and standard radiuses */
 :root {
   --bg:          #05070a;
   --surface:     #0d1117;
@@ -26,7 +27,8 @@
   --radius-sm:   4px;
 }
 
-/* Reset */
+/* Reset & Base Styles */
+/* Locks the viewport to prevent accidental zooming or scrolling outside the app containers */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100vw; overflow: hidden; }
 
@@ -38,25 +40,29 @@ body {
   line-height: 1.5;
 }
 
+/* App Layout Grid */
 #app { height: 100vh; width: 100vw; }
 .layout { display: grid; grid-template-columns: 340px 1fr; height: 100%; width: 100%; }
 
-/* Animations */
+/* Keyframe Animations */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scanDown { 0% { top: 0; } 100% { top: 100%; } }
 
-/* Sidebar (High-Density Padding) */
+/* Sidebar Layout */
+/* Acts as the locked control center. Overflow is hidden so only the internal history list scrolls */
 .sidebar {
   background: var(--surface); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; padding: 16px; z-index: 10; 
   height: 100vh; overflow: hidden; 
 }
 
+/* Branding */
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-shrink: 0; }
 .brand-mark { width: 34px; height: 34px; background: var(--blue); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 13px; color: #fff; }
 .brand h1 { font-family: var(--mono); font-size: 15px; color: var(--text-hi); font-weight: 700; letter-spacing: 0.05em; }
 .brand p  { font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; }
 
+/* Telemetry Stats */
 .session-stats { display: flex; gap: 8px; margin-bottom: 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 8px; flex-shrink: 0; }
 .stat-box { flex: 1; text-align: center; }
 .stat-box span  { display: block; font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 2px; }
@@ -64,6 +70,7 @@ body {
 .stat-real { color: var(--green) !important; }
 .stat-fake { color: var(--red) !important; }
 
+/* Evidence Locker (Drop Zone) */
 .evidence-locker { position: relative; border-radius: var(--radius); padding: 16px; text-align: center; cursor: pointer; background: var(--bg); margin-bottom: 12px; transition: 0.2s; flex-shrink: 0; border: 1px dashed var(--border); }
 .evidence-locker:hover { border-color: var(--blue); background: var(--surface2); }
 .locker-icon { stroke: var(--text-dim); margin: 0 auto 6px; display: block; transition: 0.2s; width: 24px; height: 24px; }
@@ -72,12 +79,16 @@ body {
 .evidence-locker p { font-size: 8px; color: var(--text-dim); position: relative; }
 #file-input { display: none; }
 
+/* Section Headers */
 .section-heading { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .section-heading::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .section-heading svg, .history-header svg { width: 12px; height: 12px; stroke: var(--text-dim); flex-shrink: 0; }
 
+/* Model Parameters & Toggles */
 .options-panel { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 10px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); flex-shrink: 0; }
 .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 9px; color: var(--text-mid); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Custom CSS Toggle Switch */
 .toggle { position: relative; display: inline-block; width: 30px; height: 16px; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle-slider { position: absolute; inset: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; cursor: pointer; transition: .2s; }
@@ -85,11 +96,12 @@ body {
 .toggle input:checked + .toggle-slider { background: var(--blue); border-color: var(--blue); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(14px); background: #fff; }
 
+/* Primary Action Button */
 .action-btn { width: 100%; padding: 10px; margin-bottom: 16px; flex-shrink: 0; background: var(--blue); color: #fff; border: none; border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1px; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
 .action-btn:disabled { background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); cursor: not-allowed; }
 .action-btn:not(:disabled):hover { background: #408df7; }
 
-/* History Search & Filtering */
+/* Session History & Filters */
 .history-header { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; flex-shrink: 0; }
 .clear-history { background: none; border: none; color: var(--text-dim); font-family: inherit; cursor: pointer; transition: .2s; }
 .clear-history:hover { color: var(--red); }
@@ -104,11 +116,14 @@ body {
 .filter-chip:hover { border-color: var(--text-mid); }
 .filter-chip.active { background: var(--surface2); color: var(--text-hi); border-color: var(--text-hi); }
 
-/* The history list gets flex: 1 and scrolls internally */
+/* Dynamically Scrolling History List */
+/* Flex 1 allows this element to consume remaining sidebar space and scroll independently */
 .history-list { display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; min-height: 0; padding-right: 4px; }
 .hist-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; gap: 6px; position: relative; }
 .hist-item:hover { border-color: var(--blue); background: rgba(47,129,247,0.02); }
 .hist-item.active-log { border-color: var(--blue); background: rgba(47,129,247,0.08); }
+
+/* Dynamic Status Coloring for History Items */
 .hist-item::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
 .hist-item.real::before { background: var(--green); }
 .hist-item.fake::before { background: var(--red); }
@@ -121,12 +136,14 @@ body {
 .hist-name { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .hist-time { font-family: var(--mono); font-size: 8px; color: var(--text-dim); }
 
+/* Custom Sidebar Scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-/* Main Workspace */
+/* Main Workspace View */
+/* Handles the primary container logic for the right side of the screen */
 .main-view { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 32px 40px; overflow-y: auto; position: relative; }
 
 #idle-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; opacity: 1; transition: .3s; margin: auto; }
@@ -138,19 +155,23 @@ body {
 #result-state { display: none; width: 100%; max-width: 1100px; animation: fadeIn 0.4s ease; flex-direction: column; gap: 16px; }
 #result-state.visible { display: flex; }
 
+/* Contextual Warning Banners */
 .warning-banner { display: none; align-items: center; padding: 12px 16px; border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; border: 1px solid; font-weight: 700; letter-spacing: .5px; background: var(--surface); margin-bottom: 16px; }
 .warning-banner.visible { display: flex; }
 .banner-icon { width: 14px; height: 14px; flex-shrink: 0; margin-right: 12px; }
 .warn-amber { border-color: var(--amber); color: var(--amber); border-left: 4px solid var(--amber); } .warn-amber .banner-icon { stroke: var(--amber); }
 .warn-red   { border-color: var(--red);   color: var(--red);   border-left: 4px solid var(--red); }   .warn-red .banner-icon   { stroke: var(--red); }
 
-/* Executive Panel*/
+/* Executive Panel & Visual Trust Ring */
+/* Contains the primary SVG verdict ring and top-level analytic metrics */
 .executive-panel { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; gap: 24px; align-items: center; margin-bottom: 8px; }
 .exec-left { display: flex; align-items: center; gap: 24px; flex-shrink: 0; }
 .trust-ring-box { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
 .gauge-svg { transform: rotate(-90deg); width: 120px; height: 120px; }
 .gauge-bg { fill: none; stroke: var(--bg); stroke-width: 8; }
 
+/* Gauge fill calculation */
+/* JavaScript dynamically alters the stroke-dashoffset to reveal the stroke based on the AI's confidence score */
 .gauge-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1); stroke-dasharray: 326.7; stroke-dashoffset: 326.7; }
 .gauge-fill.real { stroke: var(--green); } .gauge-fill.fake { stroke: var(--red); }
 .gauge-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -163,7 +184,8 @@ body {
 .trust-sub { font-size: 11px; color: var(--text-dim); }
 .exec-divider { width: 1px; align-self: stretch; background: var(--border); }
 
-/* Flexible card layout to prevent squishing */
+/* Metric Cards Layout */
+/* Flexible grid layout to prevent text squishing on smaller monitors */
 .exec-right { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .tm-item { display: flex; flex-direction: column; justify-content: center; gap: 8px; background: var(--surface2); padding: 14px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .tm-label { font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
@@ -171,6 +193,7 @@ body {
 .tm-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text-hi); word-wrap: break-word; line-height: 1.2;}
 .tm-sub { font-size: 9px; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; line-height: 1.3;}
 
+/* Full-Width KPI Strip */
 .kpi-strip { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px 24px; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .kpi-item { display: flex; flex-direction: column; gap: 6px; flex: 1; position: relative; overflow: hidden; }
 .kpi-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; position: relative; z-index: 2; }
@@ -179,7 +202,8 @@ body {
 .kpi-chart { position: absolute; right: -10px; bottom: 0; height: 110%; width: 75px; opacity: 0.12; pointer-events: none; transition: 0.3s ease; z-index: 1; transform-origin: bottom right; }
 .kpi-item:hover .kpi-chart { opacity: 0.35; transform: scale(1.05); }
 
-/* Shrink-Wrap Media Layout */
+/* Shrink-Wrap Media Layout & Viewers */
+/* Wraps the evidence tightly and layers the heatmaps directly over the source pixels */
 .media-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; margin-bottom: 24px; width: 100%; max-width: 900px; margin-left: auto; margin-right: auto;}
 .tabs-header { display: flex; border-bottom: 1px solid var(--border); background: var(--surface2); }
 .tab-btn { flex: 1; padding: 12px 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-dim); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1px; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
@@ -188,7 +212,7 @@ body {
 
 .media-content { background: #000; width: 100%; padding: 0; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 
-/* The container wraps the image tightly */
+/* The container wraps the image tightly to allow exact overlay positioning */
 .tab-layer { display: none; position: relative; }
 .tab-layer.active { display: inline-block; max-width: 100%; }
 
@@ -197,9 +221,11 @@ body {
 /* Overlay is strictly absolute to the active inline-block image */
 .overlay-heat { mix-blend-mode: screen; opacity: 0.8; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 
+/* Visual Scanning Animation Layer */
 .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: var(--blue); box-shadow: 0 0 10px var(--blue); display: none; z-index: 5; }
 .scanning .scan-line { display: block; animation: scanDown 2s linear infinite; }
 
+/* PDF Export Button Layout */
 .export-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; display: flex; justify-content: center; width: 100%; max-width: 900px; margin-left: auto; margin-right: auto;}
 .secondary-btn { padding: 10px 24px; background: var(--bg); color: var(--text-mid); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; font-weight: 700; cursor: pointer; transition: .2s; text-transform: uppercase; letter-spacing: 1px; width: 100%; }
 .secondary-btn:hover { border-color: var(--text-hi); color: var(--text-hi); background: rgba(255,255,255,0.05); }
