@@ -3,7 +3,8 @@ import { renderSidebar } from './components/sidebar.js';
 import { renderWorkspace } from './components/workspace.js';
 import { updateHistory } from './components/history.js';
 
-// 1. INJECT CUSTOM HTML SHELL
+// HTML Shell Injection
+// Mounts the primary layout components (Sidebar and Workspace) into the root div
 document.getElementById('app').innerHTML = `
   <div class="layout">
     ${renderSidebar()}
@@ -11,38 +12,46 @@ document.getElementById('app').innerHTML = `
   </div>
 `;
 
-// 2. DOM QUERIES
+// DOM Element References
+// Core UI triggers and display containers
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const analyzeBtn = document.getElementById('analyze-btn');
 const previewWrapper = document.getElementById('preview-wrapper');
 
+// Media viewers for source and heatmap overlays
 const previewImg = document.getElementById('preview-img');
 const videoPreview = document.getElementById('video-preview');
 const heatmapImg = document.getElementById('heatmap-img');
 const heatmapPlaceholder = document.getElementById('heatmap-placeholder');
 
+// Overlay layers for the attention rollout map
 const overlayBaseImg = document.getElementById('overlay-base-img');
 const overlayBaseVideo = document.getElementById('overlay-base-video');
 const overlayHeat = document.getElementById('overlay-heat');
 
+// State views and dynamic data containers
 const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
 const gaugeFill = document.getElementById('gauge-fill');
 const historyList = document.getElementById('history-list');
 
-// 3. STATE & INIT
+// Application State Variables
 let selectedFile = null;
 let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
 let objectUrlCache = null; 
 
+// History Filter State
 let activeFilter = 'ALL';
 let searchQuery = '';
 
+// Backend routing logic (Handles local Vite dev vs production port routing)
 const BASE_URL = window.location.port === '5173' ? 'http://127.0.0.1:8001' : '';
 
+// Database Synchronization
+// Hydrates the session history from the backend audit ledger on initial page load
 async function syncDatabaseHistory() {
   try {
     const res = await fetch(`${BASE_URL}/api/v1/history`, {
@@ -59,6 +68,8 @@ async function syncDatabaseHistory() {
 }
 syncDatabaseHistory();
 
+// Filter Engine
+// Re-evaluates the history array based on the active verdict chip and search query
 function applyHistoryFilters() {
   let filtered = sessionHistory;
   
@@ -74,7 +85,7 @@ function applyHistoryFilters() {
   updateHistory(filtered, sessionHistory);
 }
 
-// 4. EVENT LISTENERS
+// Search and Filter Event Listeners
 document.getElementById('history-search').addEventListener('input', (e) => {
     searchQuery = e.target.value;
     applyHistoryFilters();
@@ -89,8 +100,11 @@ document.querySelectorAll('.filter-chip').forEach(btn => {
     });
 });
 
+// File Ingestion Listeners
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+// Drag and drop UX handling
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
 dropZone.addEventListener('drop', e => { 
@@ -99,6 +113,7 @@ dropZone.addEventListener('drop', e => {
   handleFile(e.dataTransfer.files[0]); 
 });
 
+// Workspace Tab Navigation (Source / Heatmap / Overlay)
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -110,6 +125,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+// Session History Selection
+// Allows analysts to click an old log and restore that exact state to the dashboard
 historyList.addEventListener('click', (e) => {
   const item = e.target.closest('.hist-item');
   if (!item) return;
@@ -121,6 +138,7 @@ historyList.addEventListener('click', (e) => {
     document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
     item.classList.add('active-log');
 
+    // Free memory from the currently active file before loading historical data
     if (objectUrlCache) {
       URL.revokeObjectURL(objectUrlCache);
       objectUrlCache = null;
@@ -137,6 +155,8 @@ historyList.addEventListener('click', (e) => {
   }
 });
 
+// File Processing Initialization
+// Handles local object URLs and configures the media view before API transmission
 function handleFile(file) {
   if (!file) return;
   selectedFile = file;
@@ -176,6 +196,7 @@ function handleFile(file) {
   document.getElementById('stat-qual-sub').textContent = 'Pending';
 }
 
+// UI Loading State Manager
 function setLoading(on) {
   analyzeBtn.disabled = on;
   if (!on) {
@@ -193,6 +214,7 @@ function setLoading(on) {
   }, 400);
 }
 
+// Core Execution Pipeline
 analyzeBtn.addEventListener('click', async () => {
   idleState.style.display = 'none';
   resultState.classList.add('visible');
@@ -216,6 +238,7 @@ analyzeBtn.addEventListener('click', async () => {
       body: fd, 
       headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
     });
+    
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
     
@@ -225,6 +248,7 @@ analyzeBtn.addEventListener('click', async () => {
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
     applyHistoryFilters();
     
+    // Automatically highlight the newest log entry
     setTimeout(() => {
         const firstLog = document.querySelector('.hist-item');
         if(firstLog) firstLog.classList.add('active-log');
@@ -239,6 +263,8 @@ analyzeBtn.addEventListener('click', async () => {
   }
 });
 
+// UI Result Renderer
+// Translates the backend data dictionary into the visual DOM elements
 function renderResult(data, filename) {
   currentReport = { ...data, filename };
   const isFake = data.verdict === 'FAKE';
@@ -268,6 +294,7 @@ function renderResult(data, filename) {
   if (data.is_low_confidence) document.getElementById('low-conf-warning').style.display = 'flex';
   if (data.face_quality === "Poor") document.getElementById('low-qual-warning').style.display = 'flex';
 
+  // Inject Base64 heatmap data if the Attention Rollout was requested
   if (data.explainability_maps && data.explainability_maps.length > 0) {
       const b64 = `data:image/jpeg;base64,${data.explainability_maps[0]}`;
       heatmapImg.src = b64;
@@ -282,30 +309,39 @@ function renderResult(data, filename) {
   }
 }
 
+// Session Cleardown
 document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
   if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {
     sessionHistory = []; 
     applyHistoryFilters();
-    idleState.style.display = 'flex'; resultState.classList.remove('visible'); selectedFile = null;
-    analyzeBtn.textContent = 'AWAITING EVIDENCE'; analyzeBtn.disabled = true;
+    idleState.style.display = 'flex'; 
+    resultState.classList.remove('visible'); 
+    selectedFile = null;
+    analyzeBtn.textContent = 'AWAITING EVIDENCE'; 
+    analyzeBtn.disabled = true;
     gaugeFill.style.strokeDashoffset = 326.7;
   }
 });
 
+// PDF Report Generation (jsPDF)
 document.getElementById('export-btn').addEventListener('click', () => {
   if (!currentReport) return;
   const { jsPDF } = window.jspdf; 
   const doc = new jsPDF();
+  
   doc.setFont("courier", "bold"); doc.setFontSize(22); doc.text("ViT-CORE Forensic Report", 20, 20);
   doc.setFontSize(12); doc.setFont("courier", "normal"); doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30); doc.line(20, 35, 190, 35);
   doc.setFont("courier", "bold"); doc.text("Media File Details", 20, 45);
   doc.setFont("courier", "normal"); doc.text(`Filename: ${currentReport.filename}`, 20, 55); doc.text(`Format: ${currentReport.type.toUpperCase()}`, 20, 65); doc.text(`Frames Analyzed: ${currentReport.frames_analyzed}`, 20, 75);
+  
   doc.setFont("courier", "bold"); doc.text("Analysis Verdict", 20, 95);
   doc.setFont("courier", "normal"); doc.setTextColor(currentReport.verdict === 'FAKE' ? 255 : 0, 0, currentReport.verdict === 'REAL' ? 255 : 0); doc.text(`Verdict: ${currentReport.verdict}`, 20, 105); doc.setTextColor(0, 0, 0);
   doc.text(`Confidence: ${currentReport.confidence}%`, 20, 115); doc.text(`Raw Probability Score: ${currentReport.probability}`, 20, 125);
+  
   doc.setFont("courier", "bold"); doc.text("Model Telemetry", 20, 145);
   doc.setFont("courier", "normal"); doc.text(`Face Detection Status: ${currentReport.face_detected ? 'Positive (MTCNN)' : 'Negative'}`, 20, 155); doc.text(`Face Quality Metrics: ${currentReport.face_quality}`, 20, 165); doc.text(`Processing Time: ${currentReport.processing_time_sec} sec`, 20, 175); doc.text(`Ambiguity Flag: ${currentReport.is_low_confidence ? 'FLAGGED - MANUAL REVIEW' : 'Clear'}`, 20, 185);
+  
   doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text("Disclaimer: Results are probabilistic and should be corroborated with other evidence.", 20, 280);
   doc.save(`ViT-CORE_Report_${currentReport.filename}.pdf`);
 });
