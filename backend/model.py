@@ -31,9 +31,6 @@ def load_models():
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"[ViT-CORE] Warning: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")
     else:
-        
-        # weights_only=True is the safe default, avoids arbitrary pickle execution.
-        # Directly addresses bandit B614 / semgrep "unsafe PyTorch load" findings.
         try:
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
             sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
@@ -51,7 +48,7 @@ def load_models():
     if DEVICE.type == 'cuda':
         model.half()
 
-    # Hook the QKV layer and manually compute the attention matrix to bypass PyTorch SDPA overrides
+    # Hook the QKV layer and manually compute the attention matrix
     def qkv_hook(module, input, output):
         try:
             B, N, C = output.shape
@@ -85,11 +82,6 @@ def get_models():
 
 
 def assess_face_quality(image: Image.Image) -> dict:
-    """Computes a calibrated quality score based on Laplacian variance and mean brightness.
-
-    Returns a 3-tier status (Poor / Fair / High) instead of a binary valid flag so
-    that callers can aggregate quality conservatively across multiple frames.
-    """
     cv_img = np.array(image)
     gray = cv2.cvtColor(cv_img, cv2.COLOR_RGB2GRAY)
 
@@ -109,7 +101,6 @@ def assess_face_quality(image: Image.Image) -> dict:
 
 
 def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
-    """Generate 4 Test-Time Augmentation views (Original, Flip, Crop, Zoom-Flip)."""
     view1 = image_tensor
     view2 = F.hflip(image_tensor)
     zoom = F.center_crop(image_tensor, output_size=(200, 200))
@@ -122,35 +113,62 @@ def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
     return views
 
 
-def generate_heatmap(image: Image.Image) -> str:
-    """Generates a base64 attention map overlay with industry-standard gradient smoothing."""
+def generate_explainability_visuals(image: Image.Image) -> dict:
+    """Generates heatmap, exploded patch mosaic, and raw attention mask in base64."""
     if 'last_attn' not in _attention_cache:
-        return ""
+        return {"heatmap": "", "patches": "", "attention": ""}
 
+    # 1. Base Image Prep
+    cv_img = cv2.cvtColor(np.array(image.resize((224, 224))), cv2.COLOR_RGB2BGR)
+
+    # 2. Generate PATCHES (Tokenized Mosaic View)
+    patch_img = np.zeros_like(cv_img)
+    patch_size = 16
+    gap = 1 
+    
+    for y in range(0, 224, patch_size):
+        for x in range(0, 224, patch_size):
+            # Extract the inner 14x14 pixels of each 16x16 patch
+            chip = cv_img[y+gap : y+patch_size-gap, x+gap : x+patch_size-gap]
+            # Paste it onto the black background
+            patch_img[y+gap : y+patch_size-gap, x+gap : x+patch_size-gap] = chip
+            
+    _, buffer_patch = cv2.imencode('.jpg', patch_img)
+    patches_b64 = base64.b64encode(buffer_patch).decode('utf-8')
+
+    # 3. Process Neural Attention
     attn = _attention_cache['last_attn'][0]  # Shape: (Heads, Tokens, Tokens)
     cls_attn = np.mean(attn[:, 0, 1:], axis=0)  # Average across heads, drop CLS-to-CLS
-
+    
     grid_size = int(np.sqrt(len(cls_attn)))
     attention_grid = cls_attn.reshape((grid_size, grid_size))
     attention_grid = attention_grid / (np.max(attention_grid) + 1e-8)
-
-    cv_img = cv2.cvtColor(np.array(image.resize((224, 224))), cv2.COLOR_RGB2BGR)
+    
     attention_grid = cv2.resize(attention_grid, (224, 224))
-
     attention_grid = cv2.GaussianBlur(attention_grid, (21, 21), 0)
     attention_grid = attention_grid / (np.max(attention_grid) + 1e-8)
+    
+    heatmap_color = np.uint8(255 * attention_grid)
+    heatmap_color = cv2.applyColorMap(heatmap_color, cv2.COLORMAP_JET)
 
-    heatmap = np.uint8(255 * attention_grid)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    superimposed = cv2.addWeighted(cv_img, 0.6, heatmap, 0.4, 0)
+    # 4. Generate ATTENTION (Raw Neural Mask with no underlying image)
+    _, buffer_attn = cv2.imencode('.jpg', heatmap_color)
+    attention_b64 = base64.b64encode(buffer_attn).decode('utf-8')
 
-    _, buffer = cv2.imencode('.jpg', superimposed)
-    return base64.b64encode(buffer).decode('utf-8')
+    # 5. Generate HEATMAP (Blended Overlay)
+    superimposed = cv2.addWeighted(cv_img, 0.6, heatmap_color, 0.4, 0)
+    _, buffer_heat = cv2.imencode('.jpg', superimposed)
+    heatmap_b64 = base64.b64encode(buffer_heat).decode('utf-8')
+
+    return {
+        "heatmap": heatmap_b64,
+        "patches": patches_b64,
+        "attention": attention_b64
+    }
 
 
 @torch.inference_mode()
 def analyze_frame(image: Image.Image, generate_explainability=False):
-    """Processes a single frame: MTCNN crop -> Quality Check -> TTA -> Inference"""
     model, mtcnn = get_models()
 
     face_tensor = mtcnn(image)
@@ -173,6 +191,6 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
     avg_logits = torch.mean(out, dim=0, keepdim=True)
     prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
 
-    heatmap_b64 = generate_heatmap(display_img) if generate_explainability else ""
+    visuals = generate_explainability_visuals(display_img) if generate_explainability else {"heatmap": "", "patches": "", "attention": ""}
 
-    return float(prob), face_detected, face_quality, heatmap_b64
+    return float(prob), face_detected, face_quality, visuals
