@@ -114,24 +114,24 @@ def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
 
 
 def generate_explainability_visuals(image: Image.Image) -> dict:
-    """Generates heatmap, exploded patch mosaic, and raw attention mask in base64."""
+    """Generates heatmap, patch grid, and raw attention mask in base64."""
     if 'last_attn' not in _attention_cache:
         return {"heatmap": "", "patches": "", "attention": ""}
 
     # 1. Base Image Prep
     cv_img = cv2.cvtColor(np.array(image.resize((224, 224))), cv2.COLOR_RGB2BGR)
 
-    # 2. Generate PATCHES (Tokenized Mosaic View)
-    patch_img = np.zeros_like(cv_img)
+    # 2. Generate PATCHES (Refined Tactical Grid)
+    overlay = cv_img.copy()
     patch_size = 16
-    gap = 1 
     
-    for y in range(0, 224, patch_size):
-        for x in range(0, 224, patch_size):
-            # Extract the inner 14x14 pixels of each 16x16 patch
-            chip = cv_img[y+gap : y+patch_size-gap, x+gap : x+patch_size-gap]
-            # Paste it onto the black background
-            patch_img[y+gap : y+patch_size-gap, x+gap : x+patch_size-gap] = chip
+    # Draw crisp, 1-pixel black lines
+    for i in range(0, 224, patch_size):
+        cv2.line(overlay, (i, 0), (i, 224), (0, 0, 0), 1)
+        cv2.line(overlay, (0, i), (224, i), (0, 0, 0), 1)
+        
+    # Blend the grid at 50% opacity so it maps the tokens without overpowering the facial details
+    patch_img = cv2.addWeighted(overlay, 0.5, cv_img, 0.5, 0)
             
     _, buffer_patch = cv2.imencode('.jpg', patch_img)
     patches_b64 = base64.b64encode(buffer_patch).decode('utf-8')
