@@ -21,7 +21,6 @@ from model import analyze_frame, get_models
 from auth import verify_api_key
 import audit
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows OPTIONS pre-flight checks required by browsers
     allow_headers=["*"],  # Allows custom headers like X-API-KEY
 )
-
 
 # Frame extraction
 async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_frames=10):
@@ -168,6 +166,7 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     return result
 
+
 # Routes
 @app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
@@ -194,6 +193,7 @@ async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Que
     maps are expensive and a batch is typically a screening pass, not a
     deep-dive on a single file.
     """
+
     if len(files) > 50:
         raise HTTPException(status_code=400, detail="Batch size limited to 50 files per request.")
 
@@ -250,7 +250,6 @@ if _static.exists():
     if _assets.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
-    
     # Serve the main HTML file at the root URL
     @app.get("/")
     async def serve_frontend():
