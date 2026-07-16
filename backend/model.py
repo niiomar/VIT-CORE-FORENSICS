@@ -114,7 +114,7 @@ def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
 
 
 def generate_explainability_visuals(image: Image.Image) -> dict:
-    """Generates heatmap, patch grid, and raw attention mask in base64."""
+    """Generates heatmap (JET), patch grid, and attention mask (INFERNO) in base64."""
     if 'last_attn' not in _attention_cache:
         return {"heatmap": "", "patches": "", "attention": ""}
 
@@ -124,21 +124,17 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     # 2. Generate PATCHES (Refined Tactical Grid)
     overlay = cv_img.copy()
     patch_size = 16
-    
-    # Draw crisp, 1-pixel black lines
     for i in range(0, 224, patch_size):
         cv2.line(overlay, (i, 0), (i, 224), (0, 0, 0), 1)
         cv2.line(overlay, (0, i), (224, i), (0, 0, 0), 1)
         
-    # Blend the grid at 50% opacity so it maps the tokens without overpowering the facial details
     patch_img = cv2.addWeighted(overlay, 0.5, cv_img, 0.5, 0)
-            
     _, buffer_patch = cv2.imencode('.jpg', patch_img)
     patches_b64 = base64.b64encode(buffer_patch).decode('utf-8')
 
     # 3. Process Neural Attention
-    attn = _attention_cache['last_attn'][0]  # Shape: (Heads, Tokens, Tokens)
-    cls_attn = np.mean(attn[:, 0, 1:], axis=0)  # Average across heads, drop CLS-to-CLS
+    attn = _attention_cache['last_attn'][0]
+    cls_attn = np.mean(attn[:, 0, 1:], axis=0) 
     
     grid_size = int(np.sqrt(len(cls_attn)))
     attention_grid = cls_attn.reshape((grid_size, grid_size))
@@ -148,15 +144,16 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     attention_grid = cv2.GaussianBlur(attention_grid, (21, 21), 0)
     attention_grid = attention_grid / (np.max(attention_grid) + 1e-8)
     
-    heatmap_color = np.uint8(255 * attention_grid)
-    heatmap_color = cv2.applyColorMap(heatmap_color, cv2.COLORMAP_JET)
-
-    # 4. Generate ATTENTION (Raw Neural Mask with no underlying image)
-    _, buffer_attn = cv2.imencode('.jpg', heatmap_color)
+    # 4. Generate ATTENTION (Inferno Colormap)
+    attention_inferno = np.uint8(255 * attention_grid)
+    attention_inferno = cv2.applyColorMap(attention_inferno, cv2.COLORMAP_INFERNO)
+    _, buffer_attn = cv2.imencode('.jpg', attention_inferno)
     attention_b64 = base64.b64encode(buffer_attn).decode('utf-8')
 
-    # 5. Generate HEATMAP (Blended Overlay)
-    superimposed = cv2.addWeighted(cv_img, 0.6, heatmap_color, 0.4, 0)
+    # 5. Generate HEATMAP (Jet Colormap)
+    heatmap_jet = np.uint8(255 * attention_grid)
+    heatmap_jet = cv2.applyColorMap(heatmap_jet, cv2.COLORMAP_JET)
+    superimposed = cv2.addWeighted(cv_img, 0.6, heatmap_jet, 0.4, 0)
     _, buffer_heat = cv2.imencode('.jpg', superimposed)
     heatmap_b64 = base64.b64encode(buffer_heat).decode('utf-8')
 
