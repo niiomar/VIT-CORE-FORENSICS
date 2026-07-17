@@ -144,10 +144,23 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     attention_grid = cv2.GaussianBlur(attention_grid, (21, 21), 0)
     attention_grid = attention_grid / (np.max(attention_grid) + 1e-8)
     
-    # 4. Generate ATTENTION (Inferno Colormap)
+    # 4. Generate ATTENTION (Inferno Colormap with Fallback)
     attention_inferno = np.uint8(255 * attention_grid)
-    attention_inferno = cv2.applyColorMap(attention_inferno, cv2.COLORMAP_INFERNO)
-    _, buffer_attn = cv2.imencode('.jpg', attention_inferno)
+    try:
+        # Check if INFERNO exists, otherwise use JET
+        if hasattr(cv2, 'COLORMAP_INFERNO'):
+            attention_cmap = cv2.applyColorMap(attention_inferno, cv2.COLORMAP_INFERNO)
+        else:
+            attention_cmap = cv2.applyColorMap(attention_inferno, cv2.COLORMAP_JET)
+    except Exception:
+        # Final safety fallback
+        attention_cmap = cv2.cvtColor(attention_inferno, cv2.COLOR_GRAY2BGR)
+
+    # FIX: Blend the inferno map with a darkened version of the base image for spatial context
+    dimmed_base = cv2.convertScaleAbs(cv_img, alpha=0.3, beta=0) # Drops brightness to 30%
+    blended_attention = cv2.addWeighted(dimmed_base, 0.8, attention_cmap, 0.8, 0)
+
+    _, buffer_attn = cv2.imencode('.jpg', blended_attention)
     attention_b64 = base64.b64encode(buffer_attn).decode('utf-8')
 
     # 5. Generate HEATMAP (Jet Colormap)
