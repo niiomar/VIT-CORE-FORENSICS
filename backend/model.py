@@ -156,7 +156,7 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
         # Final safety fallback
         attention_cmap = cv2.cvtColor(attention_inferno, cv2.COLOR_GRAY2BGR)
 
-    # FIX: Blend the inferno map with a darkened version of the base image for spatial context
+    # Blend the inferno map with a darkened version of the base image for spatial context
     dimmed_base = cv2.convertScaleAbs(cv_img, alpha=0.3, beta=0) # Drops brightness to 30%
     blended_attention = cv2.addWeighted(dimmed_base, 0.8, attention_cmap, 0.8, 0)
 
@@ -182,16 +182,16 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
     model, mtcnn = get_models()
 
     face_tensor = mtcnn(image)
-    face_detected = True
     face_quality = {"valid": False, "status": "N/A", "blur": 0}
 
+    # FIX: OUT-OF-DOMAIN HARD-GATE
+    # If MTCNN doesn't find a face, we immediately exit and return None for probability.
     if face_tensor is None:
-        face_detected = False
-        face_tensor = transforms.ToTensor()(image.resize((224, 224))) * 255.0
-        display_img = image
-    else:
-        display_img = F.to_pil_image(face_tensor / 255.0)
-        face_quality = assess_face_quality(display_img)
+        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+
+    # --- Face was found. Proceed with ViT inference ---
+    display_img = F.to_pil_image(face_tensor / 255.0)
+    face_quality = assess_face_quality(display_img)
 
     batch = get_tta_views(face_tensor).to(DEVICE)
     if DEVICE.type == 'cuda':
@@ -203,4 +203,4 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
 
     visuals = generate_explainability_visuals(display_img) if generate_explainability else {"heatmap": "", "patches": "", "attention": ""}
 
-    return float(prob), face_detected, face_quality, visuals
+    return float(prob), True, face_quality, visuals
