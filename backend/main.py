@@ -118,6 +118,9 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     for frame in frames:
         prob, face_detected, face_quality, heatmap = analyze_frame(frame, generate_explainability=explain)
+        
+        # Only append valid inference data. 
+        # If prob is None (no face), face_detected is False.
         frame_data.append({
             "probability": prob,
             "face_detected": face_detected,
@@ -126,40 +129,53 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
         if heatmap:
             heatmaps.append(heatmap)
 
-    probs = [f["probability"] for f in frame_data]
-    weights = [abs(p - 0.5) for p in probs]
-    weight_sum = sum(weights)
-
-    agg_prob = (sum(p * w for p, w in zip(probs, weights)) / weight_sum
-                if weight_sum > 0 else sum(probs) / len(probs))
-    is_fake = agg_prob >= 0.5
-
+    # Filter out None probabilities (where MTCNN bypassed the ViT)
+    probs = [f["probability"] for f in frame_data if f["probability"] is not None]
+    
     faces_found = any(f["face_detected"] for f in frame_data)
 
-    # Conservative aggregation: report the WORST quality seen across all
-    # frames where a face was detected, not just the first one. A single
-    # blurry frame in an otherwise sharp video should still be flagged.
-    quality_statuses = [f["quality"]["status"] for f in frame_data if f["face_detected"]]
-    if quality_statuses:
-        from model import QUALITY_RANK
-        worst_status = min(quality_statuses, key=lambda s: QUALITY_RANK.get(s, 0))
-        final_quality_status = worst_status
-    else:
+    # FIX: Handle Out-Of-Domain Bypass
+    if not faces_found or len(probs) == 0:
+        agg_prob = None
+        is_fake = False
         final_quality_status = "N/A"
+        disposition_override = "No human subjects detected by MTCNN. Neural inference bypassed."
+    else:
+        weights = [abs(p - 0.5) for p in probs]
+        weight_sum = sum(weights)
+
+        agg_prob = (sum(p * w for p, w in zip(probs, weights)) / weight_sum
+                    if weight_sum > 0 else sum(probs) / len(probs))
+        is_fake = agg_prob >= 0.5
+        disposition_override = None
+
+        # Conservative aggregation: report the WORST quality seen across all
+        # frames where a face was detected
+        quality_statuses = [f["quality"]["status"] for f in frame_data if f["face_detected"]]
+        if quality_statuses:
+            from model import QUALITY_RANK
+            worst_status = min(quality_statuses, key=lambda s: QUALITY_RANK.get(s, 0))
+            final_quality_status = worst_status
+        else:
+            final_quality_status = "N/A"
 
     result = {
-        "verdict": "FAKE" if is_fake else "REAL",
-        "confidence": round((agg_prob if is_fake else 1 - agg_prob) * 100, 1),
-        "probability": round(float(agg_prob), 4),
+        "verdict": "UNKNOWN" if agg_prob is None else ("FAKE" if is_fake else "REAL"),
+        "confidence": None if agg_prob is None else round((agg_prob if is_fake else 1 - agg_prob) * 100, 1),
+        "probability": None if agg_prob is None else round(float(agg_prob), 4),
         "processing_time_sec": round(time.time() - start_time, 2),
         "face_detected": faces_found,
         "face_quality": final_quality_status,
         "type": filename_lower.split('.')[-1],
         "frames_analyzed": len(probs),
-        "is_low_confidence": (0.4 < agg_prob < 0.6),
+        "is_low_confidence": False if agg_prob is None else (0.4 < agg_prob < 0.6),
         "explainability_maps": heatmaps,
         "filename": file.filename,
     }
+
+    # Pass the disposition override up if we bypassed
+    if disposition_override:
+        result["disposition"] = disposition_override
 
     file_hash = audit.log_analysis(content, file.filename, result, model_version=MODEL_VERSION)
     result["file_sha256"] = file_hash
