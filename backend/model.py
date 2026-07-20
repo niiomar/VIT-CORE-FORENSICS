@@ -180,16 +180,33 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
 @torch.inference_mode()
 def analyze_frame(image: Image.Image, generate_explainability=False):
     model, mtcnn = get_models()
-
-    face_tensor = mtcnn(image)
     face_quality = {"valid": False, "status": "N/A", "blur": 0}
 
-    # FIX: OUT-OF-DOMAIN HARD-GATE
-    # If MTCNN doesn't find a face, we immediately exit and return None for probability.
+    # 1. FIX: OUT-OF-DOMAIN HARD-GATE (Detect probabilities first)
+    try:
+        boxes, probs = mtcnn.detect(image)
+    except Exception as e:
+        print(f"[ViT-CORE] MTCNN detection error: {e}")
+        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+
+    # 2. Check if absolutely nothing was found
+    if boxes is None or probs is None or len(probs) == 0:
+        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+
+    # 3. Apply strict confidence thresholding to reject artwork/pareidolia
+    best_prob = max(probs)
+    if best_prob < 0.98:
+        print(f"[ViT-CORE] Face rejected: Low confidence ({best_prob:.3f}). Likely OOD/Artwork.")
+        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+
+    # 4. Now that we know it's a photorealistic human, safely extract the tensor
+    face_tensor = mtcnn(image)
+
+    # Final safety catch
     if face_tensor is None:
         return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
 
-    # --- Face was found. Proceed with ViT inference ---
+    # --- Face was found and validated. Proceed with ViT inference ---
     display_img = F.to_pil_image(face_tensor / 255.0)
     face_quality = assess_face_quality(display_img)
 
