@@ -27,14 +27,12 @@ logger = logging.getLogger(__name__)
 MODEL_VERSION = "2.0.0"
 SUPPORTED_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv', '.webm', '.jpg', '.jpeg', '.png', '.webp', '.bmp')
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing neural weights...")
     get_models()
     yield
     logger.info("Shutting down.")
-
 
 app = FastAPI(title="ViT-CORE-FORENSICS API", version=MODEL_VERSION, lifespan=lifespan)
 
@@ -99,7 +97,6 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
             os.remove(tmp_path)
 
     return frames
-
 
 # Core analysis (shared by single + batch endpoints)
 async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
@@ -182,7 +179,6 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
 
     return result
 
-
 # Routes
 @app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
@@ -195,7 +191,6 @@ async def analyze_media(file: UploadFile = File(...), explain: bool = Query(defa
     except Exception as e:
         logger.error(f"Analysis pipeline error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/v1/analyze/batch", dependencies=[Depends(verify_api_key)])
 async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Query(default=False)):
@@ -234,12 +229,10 @@ async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Que
     }
     return {"summary": summary, "results": results}
 
-
 @app.get("/api/v1/history", dependencies=[Depends(verify_api_key)])
 async def history(limit: int = Query(default=50, le=200)):
     """Return recent audit log entries (chain-of-custody view)."""
     return {"entries": audit.get_recent(limit)}
-
 
 @app.get("/api/v1/history/{file_hash}", dependencies=[Depends(verify_api_key)])
 async def history_by_hash(file_hash: str):
@@ -249,11 +242,9 @@ async def history_by_hash(file_hash: str):
         raise HTTPException(status_code=404, detail="No records for this file hash.")
     return {"entries": entries}
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": MODEL_VERSION}
-
 
 # Static File Serving
 
