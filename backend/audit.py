@@ -19,7 +19,6 @@ from contextlib import contextmanager
 
 AUDIT_DB_PATH = os.getenv("AUDIT_DB_PATH", "audit_log.db")
 
-
 def _init_db():
     with _connect() as conn:
         conn.execute("""
@@ -40,7 +39,6 @@ def _init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_hash ON audit_log(file_sha256)")
         conn.commit()
 
-
 @contextmanager
 def _connect():
     conn = sqlite3.connect(AUDIT_DB_PATH)
@@ -49,12 +47,10 @@ def _connect():
     finally:
         conn.close()
 
-
 _init_db()
 
 def sha256_of_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
 
 def log_analysis(file_bytes: bytes, filename: str, result: dict, model_version: str = "2.0.0"):
     """Record one analysis result. Best-effort — logging failures must never
@@ -86,7 +82,6 @@ def log_analysis(file_bytes: bytes, filename: str, result: dict, model_version: 
         print(f"[Audit] Failed to log analysis: {e}")
         return None
 
-
 def get_recent(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         conn.row_factory = sqlite3.Row
@@ -94,7 +89,6 @@ def get_recent(limit: int = 50) -> list[dict]:
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
-
 
 def get_by_hash(file_hash: str) -> list[dict]:
     """Return all past analyses for a given file hash — useful for
