@@ -22,7 +22,6 @@ NORMALIZE = transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3)
 # Higher = better.
 QUALITY_RANK = {"Poor": 0, "N/A": 0, "Fair": 1, "High": 2}
 
-
 def load_models():
     global _model, _mtcnn
     _mtcnn = MTCNN(keep_all=False, device=DEVICE, post_process=False, image_size=224, margin=20)
@@ -74,12 +73,10 @@ def load_models():
     _model = model
     print(f"[ViT-CORE] Models loaded on {DEVICE}")
 
-
 def get_models():
     if _model is None or _mtcnn is None:
         load_models()
     return _model, _mtcnn
-
 
 def assess_face_quality(image: Image.Image) -> dict:
     cv_img = np.array(image)
@@ -99,7 +96,6 @@ def assess_face_quality(image: Image.Image) -> dict:
 
     return {"valid": status != "Poor", "status": status, "blur": round(blur_score, 1)}
 
-
 def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
     view1 = image_tensor
     view2 = F.hflip(image_tensor)
@@ -111,7 +107,6 @@ def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
     views = torch.stack([view1, view2, view3, view4])
     views = torch.stack([NORMALIZE(v.float() / 255.0) for v in views])
     return views
-
 
 def generate_explainability_visuals(image: Image.Image) -> dict:
     """Generates heatmap (JET), patch grid, and attention mask (INFERNO) in base64."""
@@ -176,13 +171,12 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
         "attention": attention_b64
     }
 
-
 @torch.inference_mode()
 def analyze_frame(image: Image.Image, generate_explainability=False):
     model, mtcnn = get_models()
     face_quality = {"valid": False, "status": "N/A", "blur": 0}
 
-    # 1. FIX: OUT-OF-DOMAIN HARD-GATE (Detect probabilities first)
+    # Detect probabilities first
     try:
         boxes, probs = mtcnn.detect(image)
     except Exception as e:
@@ -206,7 +200,7 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
     if face_tensor is None:
         return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
 
-    # --- Face was found and validated. Proceed with ViT inference ---
+    # Face was found and validated. Proceed with ViT inference
     display_img = F.to_pil_image(face_tensor / 255.0)
     face_quality = assess_face_quality(display_img)
 
