@@ -1,3 +1,10 @@
+"""
+FastAPI app: routes, CORS, rate limiting, request/metrics middleware, and
+lifespan-managed model loading. The actual inference pipeline lives in
+model.py; this module handles HTTP concerns and per-request orchestration
+(frame extraction, aggregation across frames/faces, audit logging).
+"""
+
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -163,10 +170,11 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
 
     # Filter out None probabilities (where MTCNN bypassed the ViT)
     probs = [f["probability"] for f in frame_data if f["probability"] is not None]
-    
+
     faces_found = any(f["face_detected"] for f in frame_data)
 
-    # FIX: Handle Out-Of-Domain Bypass
+    # No face in any frame: report UNKNOWN rather than forcing a REAL/FAKE
+    # call the model never actually made.
     if not faces_found or len(probs) == 0:
         agg_prob = None
         is_fake = False
@@ -235,8 +243,8 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
             "represent every subject in the video. Manual review recommended for multi-subject footage."
         )
 
-    # Pass the disposition override up if we bypassed, or if a multi-face
-    # note applies
+    # Surfaces any of: no-face bypass, multi-face-in-a-single-image, or
+    # multi-face-in-a-video notes set above.
     if disposition_override:
         result["disposition"] = disposition_override
 
@@ -348,9 +356,8 @@ async def metrics():
     body, content_type = metrics_response()
     return Response(content=body, media_type=content_type)
 
-# Static File Serving
-
-# Point FastAPI to the folder where Vite is actually putting the files
+# Serves the Vite production build (npm run build outputs here) so the
+# whole app is a single FastAPI process in production.
 _static = Path(__file__).parent / "static"
 
 if _static.exists():

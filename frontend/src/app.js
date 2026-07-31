@@ -5,8 +5,6 @@ import { updateHistory } from './components/history.js';
 import { executeForensicAnalysis, executeBatchAnalysis, fetchHistory } from './utils/api.js';
 import { compilePdfReport } from './utils/report.js';
 
-// HTML Shell Injection
-// Mounts the primary layout components (Sidebar and Workspace) into the root div
 document.getElementById('app').innerHTML = `
   <div class="layout">
     ${renderSidebar()}
@@ -14,8 +12,6 @@ document.getElementById('app').innerHTML = `
   </div>
 `;
 
-// DOM Element References
-// Core UI triggers and display containers
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const analyzeBtn = document.getElementById('analyze-btn');
@@ -41,7 +37,6 @@ const batchList = document.getElementById('batch-list');
 const gaugeFill = document.getElementById('gauge-fill');
 const historyList = document.getElementById('history-list');
 
-// Application State Variables
 let selectedFile = null;
 let isBatchMode = false;
 let selectedBatchFiles = [];
@@ -50,14 +45,13 @@ let sessionHistory = [];
 let loadingInterval = null;
 let objectUrlCache = null;
 
-// History Filter State
 let activeFilter = 'ALL';
 let searchQuery = '';
 
-// Database Synchronization
-// Hydrates the session history from the backend audit ledger on initial page load.
-// Relative /api paths work in both dev (proxied by vite.config.js) and prod
-// (same origin, served by FastAPI) — no separate base URL needed.
+// Hydrates the session history from the backend audit ledger on initial
+// page load. Relative /api paths work in both dev (proxied by
+// vite.config.js) and prod (same origin, served by FastAPI) — no separate
+// base URL needed.
 async function syncDatabaseHistory() {
   try {
     const data = await fetchHistory();
@@ -76,8 +70,8 @@ function handleThrottled() {
   previewWrapper.classList.remove('scanning');
 }
 
-// Filter Engine
-// Re-evaluates the history array based on the active verdict chip and search query
+// Re-evaluates the history array based on the active verdict chip and
+// search query.
 function applyHistoryFilters() {
   let filtered = sessionHistory;
   
@@ -159,8 +153,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-// Session History Selection
-// Allows analysts to click an old log and restore that exact state to the dashboard
+// Clicking an old log entry restores that exact analysis to the dashboard.
 historyList.addEventListener('click', (e) => {
   const item = e.target.closest('.hist-item');
   if (!item) return;
@@ -189,8 +182,8 @@ historyList.addEventListener('click', (e) => {
   }
 });
 
-// File Processing Initialization
-// Handles local object URLs and configures the media view before API transmission
+// Sets up the local preview (object URL) and resets the result view before
+// the file is sent for analysis.
 function handleFile(file) {
   if (!file) return;
   selectedFile = file;
@@ -231,7 +224,6 @@ function handleFile(file) {
   document.getElementById('stat-qual-sub').textContent = 'Pending';
 }
 
-// UI Loading State Manager
 function setLoading(on) {
   analyzeBtn.disabled = on;
   if (!on) {
@@ -249,7 +241,6 @@ function setLoading(on) {
   }, 400);
 }
 
-// Core Execution Pipeline
 analyzeBtn.addEventListener('click', () => {
   if (isBatchMode) {
     runBatchAnalysis();
@@ -301,7 +292,6 @@ async function runSingleAnalysis() {
   }
 }
 
-// Batch Execution Pipeline
 async function runBatchAnalysis() {
   idleState.style.display = 'none';
   resultState.classList.remove('visible');
@@ -360,8 +350,7 @@ function renderBatchResult(data) {
   }).join('');
 }
 
-// UI Result Renderer
-// Translates the backend data dictionary into the visual DOM elements
+// Translates the backend analysis response into the visual DOM elements.
 function renderResult(data, filename) {
   currentReport = { ...data, filename };
   const isFake = data.verdict === 'FAKE';
@@ -428,7 +417,6 @@ function renderResult(data, filename) {
   }
 }
 
-// Session Cleardown
 document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
   if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {

@@ -54,7 +54,6 @@ export function renderSidebar() {
         <button class="clear-history" id="clear-history-btn">CLEAR</button>
       </div>
       
-      <!-- PHASE 3: Embedded Controls -->
       <div class="history-controls">
         <input type="text" id="history-search" class="history-search" placeholder="Search filenames..." autocomplete="off"/>
         <div class="history-filters">

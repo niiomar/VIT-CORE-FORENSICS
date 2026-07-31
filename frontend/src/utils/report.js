@@ -1,5 +1,8 @@
 import jsPDF from 'jspdf';
 
+// x/y coordinates below are manual point positions on a fixed A4-ish page,
+// not a layout system — this is a fixed-format single-page report, so a
+// static coordinate grid is simpler than a flowing layout.
 export function compilePdfReport(report) {
   const pdf = new jsPDF();
 

@@ -1,3 +1,14 @@
+"""
+PyTorch inference pipeline: MTCNN face detection, test-time augmentation,
+the ViT-S/16 forward pass, and attention-rollout heatmap generation.
+
+analyze_all_faces is the core entry point — it detects and independently
+scores every face in an image. analyze_frame is a thin backward-compatible
+wrapper over it that returns only the primary (largest) face, which is what
+main.py's video-frame aggregation uses (see analyze_all_faces's docstring
+for why per-face results aren't safely aggregable across video frames).
+"""
+
 import hashlib
 import os
 import threading
@@ -124,6 +135,10 @@ def get_status() -> dict:
     }
 
 def assess_face_quality(image: Image.Image) -> dict:
+    """Blur (Laplacian variance) and brightness thresholds below are
+    calibrated heuristics, not learned from data — see MODEL_CARD.md's
+    Known Limitations. They flag obviously poor input, not a substitute
+    for quality-aware training."""
     cv_img = np.array(image)
     gray = cv2.cvtColor(cv_img, cv2.COLOR_RGB2GRAY)
 
@@ -158,10 +173,10 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     if 'last_attn' not in _attention_cache:
         return {"heatmap": "", "patches": "", "attention": ""}
 
-    # 1. Base Image Prep
     cv_img = cv2.cvtColor(np.array(image.resize((224, 224))), cv2.COLOR_RGB2BGR)
 
-    # 2. Generate PATCHES (Refined Tactical Grid)
+    # Patch grid overlay — shows the 16x16 tokenization boundaries the ViT
+    # actually operates on.
     overlay = cv_img.copy()
     patch_size = 16
     for i in range(0, 224, patch_size):
@@ -172,7 +187,8 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     _, buffer_patch = cv2.imencode('.jpg', patch_img)
     patches_b64 = base64.b64encode(buffer_patch).decode('utf-8')
 
-    # 3. Process Neural Attention
+    # Attention rollout: average the final block's CLS-token attention over
+    # all heads to get one importance weight per patch.
     attn = _attention_cache['last_attn'][0]
     cls_attn = np.mean(attn[:, 0, 1:], axis=0) 
     
@@ -184,10 +200,10 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     attention_grid = cv2.GaussianBlur(attention_grid, (21, 21), 0)
     attention_grid = attention_grid / (np.max(attention_grid) + 1e-8)
     
-    # 4. Generate ATTENTION (Inferno Colormap with Fallback)
+    # Inferno colormap reads better against a dimmed background than JET;
+    # fall back to JET on older OpenCV builds that lack COLORMAP_INFERNO.
     attention_inferno = np.uint8(255 * attention_grid)
     try:
-        # Check if INFERNO exists, otherwise use JET
         if hasattr(cv2, 'COLORMAP_INFERNO'):
             attention_cmap = cv2.applyColorMap(attention_inferno, cv2.COLORMAP_INFERNO)
         else:
@@ -203,7 +219,7 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     _, buffer_attn = cv2.imencode('.jpg', blended_attention)
     attention_b64 = base64.b64encode(buffer_attn).decode('utf-8')
 
-    # 5. Generate HEATMAP (Jet Colormap)
+    # JET-colormap heatmap — the one surfaced through the API (see main.py).
     heatmap_jet = np.uint8(255 * attention_grid)
     heatmap_jet = cv2.applyColorMap(heatmap_jet, cv2.COLORMAP_JET)
     superimposed = cv2.addWeighted(cv_img, 0.6, heatmap_jet, 0.4, 0)
