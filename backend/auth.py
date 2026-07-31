@@ -12,6 +12,7 @@ Set API_KEY in the environment (.env). If API_KEY is unset or empty,
 auth is disabled entirely (useful for local dev) and a warning is logged.
 """
 
+import hmac
 import os
 import logging
 from fastapi import Header, HTTPException, status
@@ -35,7 +36,7 @@ async def verify_api_key(x_api_key: str | None = Header(default=None, alias="X-A
     if not API_KEY:
         return  # authentication disabled
 
-    if not x_api_key or x_api_key != API_KEY:
+    if not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",

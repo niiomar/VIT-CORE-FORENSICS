@@ -78,6 +78,7 @@ ViT-CORE-FORENSICS/
 │   ├── auth.py              # API key dependency (optional, env-gated)
 │   ├── audit.py             # SQLite forensic audit log
 │   ├── requirements.txt     # Python dependencies (NumPy < 2.0 locked)
+│   ├── requirements-dev.txt # Test-only deps (pytest) — not needed at runtime
 │   ├── .env.example         # Backend config template — copy to .env
 │   ├── weights/             # Place vitcore_best.pth here (download from Releases)
 │   ├── static/              # Vite build output — generated, not tracked in git
@@ -190,6 +191,9 @@ All configuration is via environment variables loaded from `.env` files. These a
 | `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated allowed frontend origins. |
 | `MODEL_WEIGHTS_PATH` | `vitcore_best.pth` | Path to the trained checkpoint, relative to `backend/`. |
 | `AUDIT_DB_PATH` | `audit_log.db` | Path to the SQLite audit log file. |
+| `RATE_LIMIT_REQUESTS` | `20` | Max requests per client (by API key, or IP if unauthenticated) within the sliding window. Set to `0` to disable. |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Sliding window size, in seconds, for rate limiting. |
+| `BATCH_CONCURRENCY` | `4` | Max files from a `/api/v1/analyze/batch` request processed concurrently. Model inference itself is serialized internally; this bounds concurrent I/O (video decode, hashing). |
 
 ### `frontend/.env`
 
@@ -327,6 +331,7 @@ Open **http://localhost:8000**.
 
 ```bash
 cd backend
+pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 

@@ -2,6 +2,8 @@ import './styles.css';
 import { renderSidebar } from './components/sidebar.js';
 import { renderWorkspace } from './components/workspace.js';
 import { updateHistory } from './components/history.js';
+import { executeForensicAnalysis, fetchHistory } from './utils/api.js';
+import { compilePdfReport } from './utils/report.js';
 
 // HTML Shell Injection
 // Mounts the primary layout components (Sidebar and Workspace) into the root div
@@ -47,26 +49,27 @@ let objectUrlCache = null;
 let activeFilter = 'ALL';
 let searchQuery = '';
 
-// Backend routing logic (Handles local Vite dev vs production port routing)
-const BASE_URL = window.location.port === '5173' ? 'http://127.0.0.1:8001' : '';
-
 // Database Synchronization
-// Hydrates the session history from the backend audit ledger on initial page load
+// Hydrates the session history from the backend audit ledger on initial page load.
+// Relative /api paths work in both dev (proxied by vite.config.js) and prod
+// (same origin, served by FastAPI) — no separate base URL needed.
 async function syncDatabaseHistory() {
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/history`, {
-      headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
-    });
-    if (res.ok) {
-      const data = await res.json();
-      sessionHistory = data.entries.reverse();
-      applyHistoryFilters();
-    }
+    const data = await fetchHistory();
+    sessionHistory = data.entries.reverse();
+    applyHistoryFilters();
   } catch (err) {
     console.error("Database sync failed:", err);
   }
 }
 syncDatabaseHistory();
+
+function handleThrottled() {
+  document.getElementById('warn-sys-text').textContent =
+    'Rate limit exceeded — please wait a moment before retrying.';
+  document.getElementById('warn-sys-error').classList.add('visible');
+  previewWrapper.classList.remove('scanning');
+}
 
 // Filter Engine
 // Re-evaluates the history array based on the active verdict chip and search query
@@ -228,20 +231,12 @@ analyzeBtn.addEventListener('click', async () => {
   document.getElementById('low-qual-warning').style.display = 'none';
   document.getElementById('warn-sys-error').classList.remove('visible');
 
-  const fd = new FormData();
-  fd.append('file', selectedFile);
   const explain = document.getElementById('explain-toggle').checked;
 
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/analyze?explain=${explain}`, { 
-      method: 'POST', 
-      body: fd, 
-      headers: { 'X-API-KEY': import.meta.env.VITE_API_KEY || '' } 
-    });
-    
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail);
-    
+    const data = await executeForensicAnalysis(selectedFile, explain, handleThrottled);
+    if (!data) return; // request was rate-limited; handleThrottled already surfaced it
+
     previewWrapper.classList.remove('scanning');
     renderResult(data, selectedFile.name);
     
@@ -324,24 +319,8 @@ document.getElementById('clear-history-btn').addEventListener('click', () => {
   }
 });
 
-// PDF Report Generation (jsPDF)
+// PDF Report Generation (jsPDF, via utils/report.js)
 document.getElementById('export-btn').addEventListener('click', () => {
   if (!currentReport) return;
-  const { jsPDF } = window.jspdf; 
-  const doc = new jsPDF();
-  
-  doc.setFont("courier", "bold"); doc.setFontSize(22); doc.text("ViT-CORE Forensic Report", 20, 20);
-  doc.setFontSize(12); doc.setFont("courier", "normal"); doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30); doc.line(20, 35, 190, 35);
-  doc.setFont("courier", "bold"); doc.text("Media File Details", 20, 45);
-  doc.setFont("courier", "normal"); doc.text(`Filename: ${currentReport.filename}`, 20, 55); doc.text(`Format: ${currentReport.type.toUpperCase()}`, 20, 65); doc.text(`Frames Analyzed: ${currentReport.frames_analyzed}`, 20, 75);
-  
-  doc.setFont("courier", "bold"); doc.text("Analysis Verdict", 20, 95);
-  doc.setFont("courier", "normal"); doc.setTextColor(currentReport.verdict === 'FAKE' ? 255 : 0, 0, currentReport.verdict === 'REAL' ? 255 : 0); doc.text(`Verdict: ${currentReport.verdict}`, 20, 105); doc.setTextColor(0, 0, 0);
-  doc.text(`Confidence: ${currentReport.confidence}%`, 20, 115); doc.text(`Raw Probability Score: ${currentReport.probability}`, 20, 125);
-  
-  doc.setFont("courier", "bold"); doc.text("Model Telemetry", 20, 145);
-  doc.setFont("courier", "normal"); doc.text(`Face Detection Status: ${currentReport.face_detected ? 'Positive (MTCNN)' : 'Negative'}`, 20, 155); doc.text(`Face Quality Metrics: ${currentReport.face_quality}`, 20, 165); doc.text(`Processing Time: ${currentReport.processing_time_sec} sec`, 20, 175); doc.text(`Ambiguity Flag: ${currentReport.is_low_confidence ? 'FLAGGED - MANUAL REVIEW' : 'Clear'}`, 20, 185);
-  
-  doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text("Disclaimer: Results are probabilistic and should be corroborated with other evidence.", 20, 280);
-  doc.save(`ViT-CORE_Report_${currentReport.filename}.pdf`);
+  compilePdfReport(currentReport);
 });

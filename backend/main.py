@@ -5,6 +5,7 @@ env_path = Path(__file__).parent / ".env"
 loaded = load_dotenv(dotenv_path=env_path)
 print(f"[Config] .env loaded: {loaded} (path: {env_path})")
 
+import asyncio
 import logging
 import time
 import os
@@ -19,6 +20,7 @@ from fastapi.responses import FileResponse
 
 from model import analyze_frame, get_models
 from auth import verify_api_key
+from ratelimit import enforce_rate_limit
 import audit
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -40,8 +42,6 @@ app = FastAPI(title="ViT-CORE-FORENSICS API", version=MODEL_VERSION, lifespan=li
 CORS_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:8001",
-    "http://127.0.0.1:8001",
     "http://localhost:8000",
     "http://127.0.0.1:8000"
 ]
@@ -60,9 +60,15 @@ app.add_middleware(
 )
 
 # Frame extraction
-async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_frames=10):
+#
+# This does purely blocking work (tempfile I/O, cv2 decode) with no real
+# await points, so it — and _run_analysis_sync below — run off the event
+# loop via asyncio.to_thread. That's what lets analyze_batch process
+# multiple files concurrently instead of one at a time, and stops a single
+# slow analysis from stalling every other in-flight request.
+def extract_frames_to_pil(filename: str, content: bytes, num_frames=10):
     """Safely extracts frames using dynamic file suffix and converts to PIL Images."""
-    file_suffix = Path(upload_file.filename).suffix.lower()
+    file_suffix = Path(filename).suffix.lower()
     if not file_suffix:
         file_suffix = ".mp4"
 
@@ -98,17 +104,18 @@ async def extract_frames_to_pil(upload_file: UploadFile, content: bytes, num_fra
 
     return frames
 
-# Core analysis (shared by single + batch endpoints)
-async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict:
+# Core analysis (shared by single + batch endpoints). Synchronous — always
+# invoked via asyncio.to_thread, never awaited directly.
+def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
     start_time = time.time()
-    filename_lower = (file.filename or "").lower()
+    filename_lower = (filename or "").lower()
 
     if not filename_lower.endswith(SUPPORTED_EXTENSIONS):
-        raise HTTPException(status_code=400, detail=f"Unsupported media format: {file.filename}")
+        raise HTTPException(status_code=400, detail=f"Unsupported media format: {filename}")
 
-    frames = await extract_frames_to_pil(file, content)
+    frames = extract_frames_to_pil(filename, content)
     if not frames:
-        raise HTTPException(status_code=400, detail=f"Could not extract frames from {file.filename}.")
+        raise HTTPException(status_code=400, detail=f"Could not extract frames from {filename}.")
 
     frame_data = []
     heatmaps = []
@@ -116,15 +123,18 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
     for frame in frames:
         prob, face_detected, face_quality, heatmap = analyze_frame(frame, generate_explainability=explain)
         
-        # Only append valid inference data. 
+        # Only append valid inference data.
         # If prob is None (no face), face_detected is False.
         frame_data.append({
             "probability": prob,
             "face_detected": face_detected,
             "quality": face_quality,
         })
-        if heatmap:
-            heatmaps.append(heatmap)
+        # analyze_frame returns a dict of base64-encoded visuals
+        # ({"heatmap", "patches", "attention"}); the API only surfaces the
+        # blended JET heatmap, matching the documented response shape.
+        if heatmap and heatmap.get("heatmap"):
+            heatmaps.append(heatmap["heatmap"])
 
     # Filter out None probabilities (where MTCNN bypassed the ViT)
     probs = [f["probability"] for f in frame_data if f["probability"] is not None]
@@ -167,32 +177,45 @@ async def _run_analysis(file: UploadFile, content: bytes, explain: bool) -> dict
         "frames_analyzed": len(probs),
         "is_low_confidence": False if agg_prob is None else (0.4 < agg_prob < 0.6),
         "explainability_maps": heatmaps,
-        "filename": file.filename,
+        "filename": filename,
     }
 
     # Pass the disposition override up if we bypassed
     if disposition_override:
         result["disposition"] = disposition_override
 
-    file_hash = audit.log_analysis(content, file.filename, result, model_version=MODEL_VERSION)
+    file_hash = audit.log_analysis(content, filename, result, model_version=MODEL_VERSION)
     result["file_sha256"] = file_hash
 
     return result
 
+async def _run_analysis(filename: str, content: bytes, explain: bool) -> dict:
+    """Async wrapper: offloads the blocking analysis pipeline to a worker
+    thread so it doesn't stall the event loop for other in-flight requests."""
+    return await asyncio.to_thread(_run_analysis_sync, filename, content, explain)
+
 # Routes
-@app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key)])
+@app.post("/api/v1/analyze", dependencies=[Depends(verify_api_key), Depends(enforce_rate_limit)])
 async def analyze_media(file: UploadFile = File(...), explain: bool = Query(default=True)):
     logger.info(f"Analyzing asset: {file.filename}")
     content = await file.read()
     try:
-        return await _run_analysis(file, content, explain)
+        return await _run_analysis(file.filename, content, explain)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Analysis pipeline error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/analyze/batch", dependencies=[Depends(verify_api_key)])
+# Batch files are processed concurrently, bounded by BATCH_CONCURRENCY so a
+# large batch doesn't spawn 50 simultaneous model forward passes and blow
+# out GPU/CPU memory. The actual model inference is further serialized
+# inside model.py (see _inference_lock) — the concurrency win here comes
+# from overlapping I/O-bound work (video decode, hashing, audit writes)
+# across files while inference queues behind the lock.
+BATCH_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY", "4"))
+
+@app.post("/api/v1/analyze/batch", dependencies=[Depends(verify_api_key), Depends(enforce_rate_limit)])
 async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Query(default=False)):
     """
     Analyze multiple files in one request. Each file is processed
@@ -209,17 +232,21 @@ async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Que
         raise HTTPException(status_code=400, detail="Batch size limited to 50 files per request.")
 
     logger.info(f"Batch analyzing {len(files)} assets")
-    results = []
-    for f in files:
+
+    semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
+
+    async def process_one(f: UploadFile) -> dict:
         content = await f.read()
-        try:
-            res = await _run_analysis(f, content, explain)
-            results.append(res)
-        except HTTPException as e:
-            results.append({"filename": f.filename, "error": e.detail})
-        except Exception as e:
-            logger.error(f"Batch item error ({f.filename}): {e}")
-            results.append({"filename": f.filename, "error": str(e)})
+        async with semaphore:
+            try:
+                return await _run_analysis(f.filename, content, explain)
+            except HTTPException as e:
+                return {"filename": f.filename, "error": e.detail}
+            except Exception as e:
+                logger.error(f"Batch item error ({f.filename}): {e}")
+                return {"filename": f.filename, "error": str(e)}
+
+    results = await asyncio.gather(*(process_one(f) for f in files))
 
     summary = {
         "total": len(results),

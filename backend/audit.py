@@ -69,8 +69,14 @@ def log_analysis(file_bytes: bytes, filename: str, result: dict, model_version: 
                     filename,
                     result.get("type", "unknown"),
                     result.get("verdict", "UNKNOWN"),
-                    result.get("confidence", 0.0),
-                    result.get("probability", 0.0),
+                    # dict.get's default only applies when the key is
+                    # missing — confidence/probability are explicitly None
+                    # when no face was detected, so `or` is needed to
+                    # actually coalesce them for the NOT NULL columns below.
+                    # (verdict == "UNKNOWN" is how a reader distinguishes
+                    # this from a genuine 0.0 confidence verdict.)
+                    result.get("confidence") or 0.0,
+                    result.get("probability") or 0.0,
                     result.get("frames_analyzed", 0),
                     model_version,
                     result.get("processing_time_sec", 0.0),

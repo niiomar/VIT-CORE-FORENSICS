@@ -4,15 +4,32 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_KEY: ${VITE_API_KEY:-vitcore_forensics_secure_token_2026}
+        VITE_API_KEY: ${VITE_API_KEY:-changeme}
     ports:
-      - "8000:8000"
+      # Bound to localhost only. Change to "0.0.0.0:8000:8000" only if
+      # placing behind a reverse proxy on the same host.
+      - "127.0.0.1:8000:8000"
     env_file:
       - backend/.env
     volumes:
       - ./weights:/app/weights:ro
       - ./data:/app/data
     restart: unless-stopped
+
+    # Prevents privilege escalation if the process is compromised.
+    security_opt:
+      - no-new-privileges:true
+
+    # Drops all Linux capabilities; add back only what's explicitly needed.
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
     # Uncomment to enable GPU access (requires NVIDIA Container Toolkit).
     # deploy:

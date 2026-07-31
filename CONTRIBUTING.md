@@ -18,6 +18,7 @@ backend smoke tests before submitting a PR:
 
 ```bash
 cd backend
+pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 

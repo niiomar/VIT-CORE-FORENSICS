@@ -1,4 +1,5 @@
 import os
+import threading
 import torch
 import numpy as np
 import cv2
@@ -15,6 +16,13 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _model = None
 _mtcnn = None
 _attention_cache = {}
+
+# analyze_frame is invoked from worker threads (see main.py's use of
+# asyncio.to_thread) so batches don't block the event loop. The QKV hook
+# populates _attention_cache as a side effect of the forward pass, so the
+# forward pass + heatmap read must be serialized to avoid one thread reading
+# another thread's attention matrix.
+_inference_lock = threading.Lock()
 
 NORMALIZE = transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3)
 
@@ -208,10 +216,14 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
     if DEVICE.type == 'cuda':
         batch = batch.half()
 
-    out = model(batch)
-    avg_logits = torch.mean(out, dim=0, keepdim=True)
-    prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
+    # Serialized: the QKV hook writes to the shared _attention_cache, so the
+    # forward pass and the heatmap read of that cache must be atomic across
+    # concurrently-running worker threads.
+    with _inference_lock:
+        out = model(batch)
+        avg_logits = torch.mean(out, dim=0, keepdim=True)
+        prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
 
-    visuals = generate_explainability_visuals(display_img) if generate_explainability else {"heatmap": "", "patches": "", "attention": ""}
+        visuals = generate_explainability_visuals(display_img) if generate_explainability else {"heatmap": "", "patches": "", "attention": ""}
 
     return float(prob), True, face_quality, visuals

@@ -12,46 +12,50 @@ export function compilePdfReport(report) {
     frames_analyzed,
     processing_time_sec,
     face_detected,
-    face_quality
+    face_quality,
+    is_low_confidence,
   } = report;
 
-  let y = 20;
+  pdf.setFont('courier', 'bold');
+  pdf.setFontSize(22);
+  pdf.text('ViT-CORE Forensic Report', 20, 20);
 
-  pdf.setFontSize(20);
-  pdf.text('VIT-CORE FORENSICS REPORT', 20, y);
-
-  y += 15;
   pdf.setFontSize(12);
+  pdf.setFont('courier', 'normal');
+  pdf.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+  pdf.line(20, 35, 190, 35);
 
-  const rows = [
-    ['Filename', filename],
-    ['Verdict', verdict],
-    ['Confidence', `${confidence}%`],
-    ['Probability Score', String(probability)],
-    ['Media Type', String(type).toUpperCase()],
-    ['Frames Analysed', String(frames_analyzed)],
-    ['Processing Time', `${processing_time_sec}s`],
-    ['Face Detected', face_detected ? 'Yes' : 'No'],
-    ['Face Quality', face_quality]
-  ];
+  pdf.setFont('courier', 'bold');
+  pdf.text('Media File Details', 20, 45);
+  pdf.setFont('courier', 'normal');
+  pdf.text(`Filename: ${filename}`, 20, 55);
+  pdf.text(`Format: ${String(type).toUpperCase()}`, 20, 65);
+  pdf.text(`Frames Analyzed: ${frames_analyzed}`, 20, 75);
 
-  rows.forEach(([label, value]) => {
-    pdf.text(`${label}: ${value}`, 20, y);
-    y += 10;
-  });
+  pdf.setFont('courier', 'bold');
+  pdf.text('Analysis Verdict', 20, 95);
+  pdf.setFont('courier', 'normal');
+  pdf.setTextColor(verdict === 'FAKE' ? 255 : 0, 0, verdict === 'REAL' ? 255 : 0);
+  pdf.text(`Verdict: ${verdict}`, 20, 105);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text(`Confidence: ${confidence}%`, 20, 115);
+  pdf.text(`Raw Probability Score: ${probability}`, 20, 125);
 
-  y += 10;
+  pdf.setFont('courier', 'bold');
+  pdf.text('Model Telemetry', 20, 145);
+  pdf.setFont('courier', 'normal');
+  pdf.text(`Face Detection Status: ${face_detected ? 'Positive (MTCNN)' : 'Negative'}`, 20, 155);
+  pdf.text(`Face Quality Metrics: ${face_quality}`, 20, 165);
+  pdf.text(`Processing Time: ${processing_time_sec} sec`, 20, 175);
+  pdf.text(`Ambiguity Flag: ${is_low_confidence ? 'FLAGGED - MANUAL REVIEW' : 'Clear'}`, 20, 185);
 
-  pdf.text(
-    `Generated: ${new Date().toLocaleString()}`,
-    20,
-    y
-  );
+  pdf.setFontSize(10);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text('Disclaimer: Results are probabilistic and should be corroborated with other evidence.', 20, 280);
 
-  const safeName =
-    (filename || 'report')
-      .replace(/[^\w.-]/g, '_')
-      .replace(/\.[^.]+$/, '');
+  const safeName = (filename || 'report')
+    .replace(/[^\w.-]/g, '_')
+    .replace(/\.[^.]+$/, '');
 
   pdf.save(`${safeName}_forensics_report.pdf`);
 }
