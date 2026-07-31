@@ -2,6 +2,10 @@
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
+python-dotenv>=1.0.0
+
+# Observability
+prometheus-client>=0.20.0
 
 # Core Machine Learning & Vision
 torch>=2.0.0

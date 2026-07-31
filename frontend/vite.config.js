@@ -16,12 +16,18 @@ export default defineConfig({
   
   // 2. PRODUCTION SETTINGS (Building directly into the backend)
   build: {
-    outDir: '../backend/static', 
-    emptyOutDir: true, 
+    outDir: '../backend/static',
+    emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
+        main: resolve(import.meta.dirname, 'index.html'),
       },
     },
+  },
+
+  // 3. TEST SETTINGS (read by `vitest run` — ignored by plain `vite build`)
+  test: {
+    environment: 'jsdom',
+    globals: false,
   },
 });

@@ -26,10 +26,20 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Compile check
-        run: python -m py_compile main.py model.py auth.py audit.py ratelimit.py
+        run: python -m py_compile main.py model.py auth.py audit.py ratelimit.py version.py observability.py
 
       - name: Smoke test (CPU, untrained weights)
         run: python -m pytest tests/ -v
+
+      - name: Dependency vulnerability scan (pip-audit)
+        # Informational: the torch/opencv/numpy dependency chain regularly
+        # carries upstream CVEs with no available fix, which would make this
+        # a permanently-red, unactionable gate if it failed the build.
+        # Findings still show up in the Actions log for review.
+        continue-on-error: true
+        run: |
+          pip install pip-audit -q
+          pip-audit -r requirements.txt
 
   frontend:
     runs-on: ubuntu-latest
@@ -50,3 +60,12 @@ jobs:
         run: npm run build
         env:
           VITE_API_KEY: ci-placeholder-key
+
+      - name: Test
+        run: npm test
+
+      - name: Dependency vulnerability scan (npm audit)
+        # Informational, same reasoning as pip-audit on the backend job —
+        # see that step's comment.
+        continue-on-error: true
+        run: npm audit --audit-level=high

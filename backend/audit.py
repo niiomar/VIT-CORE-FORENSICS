@@ -17,10 +17,19 @@ import hashlib
 import time
 from contextlib import contextmanager
 
+from version import MODEL_VERSION
+
 AUDIT_DB_PATH = os.getenv("AUDIT_DB_PATH", "audit_log.db")
 
 def _init_db():
     with _connect() as conn:
+        # WAL lets readers (history endpoints) proceed without blocking on
+        # writers, and vice versa — needed now that analysis requests run
+        # concurrently across worker threads (see main.py's asyncio.to_thread
+        # usage) instead of one at a time. journal_mode is persisted in the
+        # DB file itself, so this only needs to run once at startup
+        # (busy_timeout, set per-connection in _connect(), handles the rest).
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +51,9 @@ def _init_db():
 @contextmanager
 def _connect():
     conn = sqlite3.connect(AUDIT_DB_PATH)
+    # busy_timeout is per-connection (unlike journal_mode, which is a
+    # persisted DB property) — must be set every time.
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
     finally:
@@ -52,7 +64,7 @@ _init_db()
 def sha256_of_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
-def log_analysis(file_bytes: bytes, filename: str, result: dict, model_version: str = "2.0.0"):
+def log_analysis(file_bytes: bytes, filename: str, result: dict, model_version: str = MODEL_VERSION):
     """Record one analysis result. Best-effort — logging failures must never
     block the API response, so errors are swallowed and printed."""
     try:

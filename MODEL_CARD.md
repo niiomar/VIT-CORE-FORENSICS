@@ -87,6 +87,7 @@ Two independent views are generated for each image:
 
 - Performance decreases under significant domain shift, from 96.84% AUC in-domain to approximately 75–80% AUC on unseen datasets.
 - The framework operates on single frames and does not leverage temporal information available in videos.
+- Multiple faces in a single image are each scored independently. For video, the deployment layer (`backend/model.py`/`main.py`) does not track face identity across frames, so when a clip contains more than one person, the aggregated verdict reflects only the primary (largest) face per frame — the API flags this via `multiple_faces_detected` and a `disposition` note rather than silently blending distinct individuals' scores.
 - Performance on datasets and manipulation techniques outside the evaluation benchmark remains unknown.
 - Strong real-world robustness against emerging diffusion-based face manipulation methods has not yet been established.
 - The system analyzes facial content only and may be affected by face detection failures or extreme image degradation.

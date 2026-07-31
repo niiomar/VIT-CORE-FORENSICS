@@ -1,3 +1,4 @@
+import hashlib
 import os
 import threading
 import torch
@@ -11,6 +12,7 @@ from PIL import Image
 from facenet_pytorch import MTCNN
 
 CHECKPOINT_PATH = os.getenv("MODEL_WEIGHTS_PATH", "vitcore_best.pth")
+CHECKPOINT_SHA256 = os.getenv("MODEL_WEIGHTS_SHA256", "").strip().lower()
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 _model = None
@@ -30,14 +32,39 @@ NORMALIZE = transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3)
 # Higher = better.
 QUALITY_RANK = {"Poor": 0, "N/A": 0, "Fair": 1, "High": 2}
 
+def _verify_checkpoint_integrity(path: str) -> None:
+    """Hash the checkpoint and log it, so an operator can capture it once
+    from a known-good load and pin it via MODEL_WEIGHTS_SHA256. If that env
+    var is set, refuse to start on a mismatch — this is a forensics tool,
+    so a corrupted download or a silently swapped/tampered checkpoint should
+    fail loudly, not produce quietly-wrong verdicts."""
+    sha256 = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            sha256.update(chunk)
+    digest = sha256.hexdigest()
+    print(f"[ViT-CORE] Checkpoint SHA-256: {digest}")
+
+    if CHECKPOINT_SHA256 and digest != CHECKPOINT_SHA256:
+        raise RuntimeError(
+            f"Checkpoint integrity check failed for {path}: expected "
+            f"{CHECKPOINT_SHA256}, got {digest}. Refusing to load a "
+            f"checkpoint that doesn't match MODEL_WEIGHTS_SHA256."
+        )
+
 def load_models():
     global _model, _mtcnn
-    _mtcnn = MTCNN(keep_all=False, device=DEVICE, post_process=False, image_size=224, margin=20)
+    # keep_all=True detects every face in the frame instead of only the
+    # largest — needed for analyze_all_faces below. MTCNN's default
+    # select_largest=True still orders faces largest-first, so index 0 is
+    # unchanged from the old keep_all=False behavior.
+    _mtcnn = MTCNN(keep_all=True, device=DEVICE, post_process=False, image_size=224, margin=20)
 
     model = vit_small_patch16_224(pretrained=False, num_classes=2)
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"[ViT-CORE] Warning: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")
     else:
+        _verify_checkpoint_integrity(CHECKPOINT_PATH)
         try:
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
             sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
@@ -85,6 +112,16 @@ def get_models():
     if _model is None or _mtcnn is None:
         load_models()
     return _model, _mtcnn
+
+def get_status() -> dict:
+    """Liveness/readiness details for /health — whether the model is
+    actually usable, not just whether the process is up."""
+    return {
+        "model_loaded": _model is not None,
+        "device": str(DEVICE),
+        "weights_path": CHECKPOINT_PATH,
+        "weights_found": os.path.exists(CHECKPOINT_PATH),
+    }
 
 def assess_face_quality(image: Image.Image) -> dict:
     cv_img = np.array(image)
@@ -179,51 +216,84 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
         "attention": attention_b64
     }
 
-@torch.inference_mode()
-def analyze_frame(image: Image.Image, generate_explainability=False):
-    model, mtcnn = get_models()
-    face_quality = {"valid": False, "status": "N/A", "blur": 0}
+_EMPTY_VISUALS = {"heatmap": "", "patches": "", "attention": ""}
 
-    # Detect probabilities first
+@torch.inference_mode()
+def analyze_all_faces(image: Image.Image, generate_explainability: bool = False) -> list:
+    """Detect and independently score every face in the image.
+
+    Faces are returned largest-first (MTCNN's select_largest ordering), so
+    index 0 is the "primary" subject a single-face caller should use. Each
+    face gets its own MTCNN confidence gate, TTA batch, and ViT forward
+    pass — scoring is fully independent per face, which is only safe to
+    treat as ground truth within a single image. There's no identity
+    tracking across video frames, so callers aggregating over a sequence of
+    frames should not assume face N in frame A is the same person as face N
+    in frame B (see analyze_frame, which sidesteps this entirely by only
+    ever using the primary face).
+    """
+    model, mtcnn = get_models()
+
     try:
         boxes, probs = mtcnn.detect(image)
     except Exception as e:
         print(f"[ViT-CORE] MTCNN detection error: {e}")
-        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+        return []
 
-    # 2. Check if absolutely nothing was found
     if boxes is None or probs is None or len(probs) == 0:
-        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+        return []
 
-    # 3. Apply strict confidence thresholding to reject artwork/pareidolia
-    best_prob = max(probs)
-    if best_prob < 0.98:
-        print(f"[ViT-CORE] Face rejected: Low confidence ({best_prob:.3f}). Likely OOD/Artwork.")
-        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+    # Reject artwork/pareidolia per-face: only score faces MTCNN is highly
+    # confident about, rather than gating the whole image on the single
+    # best detection.
+    valid_indices = [i for i, p in enumerate(probs) if p is not None and p >= 0.98]
+    if not valid_indices:
+        print(f"[ViT-CORE] Face(s) rejected: low confidence (best={max(probs):.3f}). Likely OOD/Artwork.")
+        return []
 
-    # 4. Now that we know it's a photorealistic human, safely extract the tensor
-    face_tensor = mtcnn(image)
+    face_tensors = mtcnn(image)  # (n, 3, 224, 224), same order as boxes/probs
+    if face_tensors is None:
+        return []
 
-    # Final safety catch
-    if face_tensor is None:
-        return None, False, face_quality, {"heatmap": "", "patches": "", "attention": ""}
+    results = []
+    for i in valid_indices:
+        if i >= face_tensors.shape[0]:
+            continue
+        face_tensor = face_tensors[i]
 
-    # Face was found and validated. Proceed with ViT inference
-    display_img = F.to_pil_image(face_tensor / 255.0)
-    face_quality = assess_face_quality(display_img)
+        display_img = F.to_pil_image(face_tensor / 255.0)
+        face_quality = assess_face_quality(display_img)
 
-    batch = get_tta_views(face_tensor).to(DEVICE)
-    if DEVICE.type == 'cuda':
-        batch = batch.half()
+        batch = get_tta_views(face_tensor).to(DEVICE)
+        if DEVICE.type == 'cuda':
+            batch = batch.half()
 
-    # Serialized: the QKV hook writes to the shared _attention_cache, so the
-    # forward pass and the heatmap read of that cache must be atomic across
-    # concurrently-running worker threads.
-    with _inference_lock:
-        out = model(batch)
-        avg_logits = torch.mean(out, dim=0, keepdim=True)
-        prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
+        # Serialized: the QKV hook writes to the shared _attention_cache, so
+        # the forward pass and the heatmap read of that cache must be atomic
+        # across concurrently-running worker threads (and across faces).
+        with _inference_lock:
+            out = model(batch)
+            avg_logits = torch.mean(out, dim=0, keepdim=True)
+            prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
+            visuals = generate_explainability_visuals(display_img) if generate_explainability else _EMPTY_VISUALS
 
-        visuals = generate_explainability_visuals(display_img) if generate_explainability else {"heatmap": "", "patches": "", "attention": ""}
+        results.append({
+            "probability": float(prob),
+            "quality": face_quality,
+            "visuals": visuals,
+        })
 
-    return float(prob), True, face_quality, visuals
+    return results
+
+def analyze_frame(image: Image.Image, generate_explainability=False):
+    """Backward-compatible single-face view over analyze_all_faces: scores
+    every face but returns only the primary (largest) one. This is what
+    main.py's per-frame video aggregation uses, since it doesn't track face
+    identity across frames — see analyze_all_faces directly for the full
+    per-face breakdown (safe to use for a single image)."""
+    faces = analyze_all_faces(image, generate_explainability)
+    if not faces:
+        return None, False, {"valid": False, "status": "N/A", "blur": 0}, _EMPTY_VISUALS
+
+    primary = faces[0]
+    return primary["probability"], True, primary["quality"], primary["visuals"]

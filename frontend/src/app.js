@@ -2,7 +2,7 @@ import './styles.css';
 import { renderSidebar } from './components/sidebar.js';
 import { renderWorkspace } from './components/workspace.js';
 import { updateHistory } from './components/history.js';
-import { executeForensicAnalysis, fetchHistory } from './utils/api.js';
+import { executeForensicAnalysis, executeBatchAnalysis, fetchHistory } from './utils/api.js';
 import { compilePdfReport } from './utils/report.js';
 
 // HTML Shell Injection
@@ -35,15 +35,20 @@ const overlayHeat = document.getElementById('overlay-heat');
 // State views and dynamic data containers
 const idleState = document.getElementById('idle-state');
 const resultState = document.getElementById('result-state');
+const batchState = document.getElementById('batch-state');
+const batchSummary = document.getElementById('batch-summary');
+const batchList = document.getElementById('batch-list');
 const gaugeFill = document.getElementById('gauge-fill');
 const historyList = document.getElementById('history-list');
 
 // Application State Variables
 let selectedFile = null;
+let isBatchMode = false;
+let selectedBatchFiles = [];
 let currentReport = null;
 let sessionHistory = [];
 let loadingInterval = null;
-let objectUrlCache = null; 
+let objectUrlCache = null;
 
 // History Filter State
 let activeFilter = 'ALL';
@@ -105,16 +110,42 @@ document.querySelectorAll('.filter-chip').forEach(btn => {
 
 // File Ingestion Listeners
 dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
 // Drag and drop UX handling
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
-dropZone.addEventListener('drop', e => { 
-  e.preventDefault(); 
-  dropZone.classList.remove('dragover'); 
-  handleFile(e.dataTransfer.files[0]); 
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
 });
+
+// Routes to the existing single-file flow, or batch mode when more than
+// one file is selected/dropped.
+function handleFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0) return;
+
+  if (files.length === 1) {
+    isBatchMode = false;
+    selectedBatchFiles = [];
+    handleFile(files[0]);
+    return;
+  }
+
+  isBatchMode = true;
+  selectedBatchFiles = files;
+  selectedFile = null;
+
+  batchState.classList.remove('visible');
+  resultState.classList.remove('visible');
+  idleState.style.display = 'flex';
+  document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
+
+  analyzeBtn.disabled = false;
+  analyzeBtn.textContent = `ANALYZE BATCH (${files.length} FILES)`;
+}
 
 // Workspace Tab Navigation (Source / Heatmap / Overlay)
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -189,8 +220,9 @@ function handleFile(file) {
   overlayHeat.style.display = 'none';
   heatmapPlaceholder.style.display = 'block';
   
-  idleState.style.display = 'flex'; 
+  idleState.style.display = 'flex';
   resultState.classList.remove('visible');
+  batchState.classList.remove('visible');
   gaugeFill.style.strokeDashoffset = 326.7;
   
   document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active-log'));
@@ -218,17 +250,28 @@ function setLoading(on) {
 }
 
 // Core Execution Pipeline
-analyzeBtn.addEventListener('click', async () => {
+analyzeBtn.addEventListener('click', () => {
+  if (isBatchMode) {
+    runBatchAnalysis();
+  } else {
+    runSingleAnalysis();
+  }
+});
+
+async function runSingleAnalysis() {
   idleState.style.display = 'none';
   resultState.classList.add('visible');
+  batchState.classList.remove('visible');
   previewWrapper.classList.add('scanning');
-  
+
   document.querySelector('[data-target="tab-source"]').click();
-  
+
   setLoading(true);
-  gaugeFill.style.strokeDashoffset = 326.7; 
+  gaugeFill.style.strokeDashoffset = 326.7;
   document.getElementById('low-conf-warning').style.display = 'none';
   document.getElementById('low-qual-warning').style.display = 'none';
+  document.getElementById('disposition-banner').classList.remove('visible');
+  document.getElementById('face-list').style.display = 'none';
   document.getElementById('warn-sys-error').classList.remove('visible');
 
   const explain = document.getElementById('explain-toggle').checked;
@@ -239,16 +282,16 @@ analyzeBtn.addEventListener('click', async () => {
 
     previewWrapper.classList.remove('scanning');
     renderResult(data, selectedFile.name);
-    
+
     sessionHistory.unshift({ timestamp: new Date().toISOString(), filename: selectedFile.name, ...data });
     applyHistoryFilters();
-    
+
     // Automatically highlight the newest log entry
     setTimeout(() => {
         const firstLog = document.querySelector('.hist-item');
         if(firstLog) firstLog.classList.add('active-log');
     }, 100);
-    
+
   } catch (err) {
     document.getElementById('warn-sys-text').textContent = err.message;
     document.getElementById('warn-sys-error').classList.add('visible');
@@ -256,7 +299,66 @@ analyzeBtn.addEventListener('click', async () => {
   } finally {
     setLoading(false);
   }
-});
+}
+
+// Batch Execution Pipeline
+async function runBatchAnalysis() {
+  idleState.style.display = 'none';
+  resultState.classList.remove('visible');
+  batchState.classList.add('visible');
+  document.getElementById('warn-sys-error').classList.remove('visible');
+
+  analyzeBtn.disabled = true;
+  const fileCount = selectedBatchFiles.length;
+  analyzeBtn.textContent = `Analyzing ${fileCount} files...`;
+
+  try {
+    const data = await executeBatchAnalysis(selectedBatchFiles, handleThrottled);
+    if (!data) return; // rate-limited; handleThrottled already surfaced it
+
+    renderBatchResult(data);
+
+    const timestamp = new Date().toISOString();
+    data.results.forEach(r => {
+      if (!r.error) sessionHistory.unshift({ timestamp, ...r });
+    });
+    applyHistoryFilters();
+  } catch (err) {
+    document.getElementById('warn-sys-text').textContent = err.message;
+    document.getElementById('warn-sys-error').classList.add('visible');
+  } finally {
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = `ANALYZE BATCH (${fileCount} FILES)`;
+  }
+}
+
+function renderBatchResult(data) {
+  const { summary, results } = data;
+
+  batchSummary.innerHTML = `
+    <span class="batch-stat">TOTAL<strong>${summary.total}</strong></span>
+    <span class="batch-stat batch-real">REAL<strong>${summary.real}</strong></span>
+    <span class="batch-stat batch-fake">FAKE<strong>${summary.fake}</strong></span>
+    <span class="batch-stat batch-error">ERRORS<strong>${summary.errors}</strong></span>
+  `;
+
+  batchList.innerHTML = results.map(r => {
+    if (r.error) {
+      return `<div class="batch-row batch-row-error">
+        <span class="batch-row-name" title="${r.filename}">${r.filename}</span>
+        <span class="batch-row-badge error">ERROR</span>
+        <span class="batch-row-detail" title="${r.error}">${r.error}</span>
+      </div>`;
+    }
+    const cls = r.verdict === 'FAKE' ? 'fake' : 'real';
+    const multi = r.multiple_faces_detected ? ' &middot; multi-face' : '';
+    return `<div class="batch-row">
+      <span class="batch-row-name" title="${r.filename}">${r.filename}</span>
+      <span class="batch-row-badge ${cls}">${r.verdict}</span>
+      <span class="batch-row-detail">${r.confidence}% &middot; ${r.face_quality}${multi}</span>
+    </div>`;
+  }).join('');
+}
 
 // UI Result Renderer
 // Translates the backend data dictionary into the visual DOM elements
@@ -289,6 +391,28 @@ function renderResult(data, filename) {
   if (data.is_low_confidence) document.getElementById('low-conf-warning').style.display = 'flex';
   if (data.face_quality === "Poor") document.getElementById('low-qual-warning').style.display = 'flex';
 
+  if (data.disposition) {
+    document.getElementById('disposition-text').textContent = data.disposition;
+    document.getElementById('disposition-banner').classList.add('visible');
+  }
+
+  // Independent per-face verdicts (multiple faces in a single image only —
+  // see the disposition note above for the video-with-multiple-faces case)
+  const faceList = document.getElementById('face-list');
+  if (data.faces && data.faces.length > 0) {
+    document.getElementById('face-list-rows').innerHTML = data.faces.map((f, idx) => {
+      const fcls = f.verdict === 'FAKE' ? 'fake' : 'real';
+      return `<div class="batch-row">
+        <span class="batch-row-name">Face ${idx + 1}${idx === 0 ? ' (primary)' : ''}</span>
+        <span class="batch-row-badge ${fcls}">${f.verdict}</span>
+        <span class="batch-row-detail">${f.confidence}% &middot; ${f.face_quality}</span>
+      </div>`;
+    }).join('');
+    faceList.style.display = 'flex';
+  } else {
+    faceList.style.display = 'none';
+  }
+
   // Inject Base64 heatmap data if the Attention Rollout was requested
   if (data.explainability_maps && data.explainability_maps.length > 0) {
       const b64 = `data:image/jpeg;base64,${data.explainability_maps[0]}`;
@@ -308,12 +432,15 @@ function renderResult(data, filename) {
 document.getElementById('clear-history-btn').addEventListener('click', () => {
   if (sessionHistory.length === 0) return;
   if (confirm("Clear the current session history view? (Note: Database logs remain securely stored in the backend)")) {
-    sessionHistory = []; 
+    sessionHistory = [];
     applyHistoryFilters();
-    idleState.style.display = 'flex'; 
-    resultState.classList.remove('visible'); 
+    idleState.style.display = 'flex';
+    resultState.classList.remove('visible');
+    batchState.classList.remove('visible');
     selectedFile = null;
-    analyzeBtn.textContent = 'AWAITING EVIDENCE'; 
+    isBatchMode = false;
+    selectedBatchFiles = [];
+    analyzeBtn.textContent = 'AWAITING EVIDENCE';
     analyzeBtn.disabled = true;
     gaugeFill.style.strokeDashoffset = 326.7;
   }

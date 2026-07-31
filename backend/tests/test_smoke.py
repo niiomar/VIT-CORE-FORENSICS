@@ -46,13 +46,15 @@ def test_pipeline_runs_full_path(monkeypatch):
     of regression this smoke test exists for."""
     vitcore_model.load_models()
 
-    fake_face_tensor = torch.full((3, 224, 224), 128.0)
+    # MTCNN(keep_all=True) always returns a stacked (n, 3, H, W) tensor,
+    # even for a single face — see facenet_pytorch's MTCNN.extract().
+    fake_face_tensors = torch.full((1, 3, 224, 224), 128.0)
     monkeypatch.setattr(
         vitcore_model._mtcnn, "detect",
         lambda img: (np.array([[0, 0, 224, 224]]), np.array([0.999])),
     )
     monkeypatch.setattr(
-        type(vitcore_model._mtcnn), "__call__", lambda self, img: fake_face_tensor
+        type(vitcore_model._mtcnn), "__call__", lambda self, img: fake_face_tensors
     )
 
     blank = Image.fromarray(np.full((224, 224, 3), 128, dtype=np.uint8))
@@ -67,6 +69,59 @@ def test_pipeline_runs_full_path(monkeypatch):
     # Heatmap should be a non-empty base64 string when explainability is on
     assert isinstance(visuals, dict)
     assert isinstance(visuals["heatmap"], str) and visuals["heatmap"] != ""
+
+
+def test_analyze_all_faces_multi_face(monkeypatch):
+    """Multiple faces in one image should each get an independent verdict,
+    and analyze_frame's backward-compat wrapper should still surface only
+    the primary (first/largest) one."""
+    vitcore_model.load_models()
+
+    fake_face_tensors = torch.full((2, 3, 224, 224), 128.0)
+    monkeypatch.setattr(
+        vitcore_model._mtcnn, "detect",
+        lambda img: (
+            np.array([[0, 0, 100, 100], [120, 120, 224, 224]]),
+            np.array([0.999, 0.995]),
+        ),
+    )
+    monkeypatch.setattr(
+        type(vitcore_model._mtcnn), "__call__", lambda self, img: fake_face_tensors
+    )
+
+    blank = Image.fromarray(np.full((224, 224, 3), 128, dtype=np.uint8))
+
+    faces = vitcore_model.analyze_all_faces(blank, generate_explainability=False)
+    assert len(faces) == 2
+    for f in faces:
+        assert 0.0 <= f["probability"] <= 1.0
+        assert f["quality"]["status"] in ("Poor", "Fair", "High")
+
+    prob, face_detected, quality, visuals = vitcore_model.analyze_frame(blank)
+    assert face_detected is True
+    assert prob == faces[0]["probability"]
+
+
+def test_analyze_all_faces_rejects_low_confidence_detections(monkeypatch):
+    """A face below the 0.98 OOD gate should be dropped, not crash or get
+    silently scored alongside genuine detections."""
+    vitcore_model.load_models()
+
+    fake_face_tensors = torch.full((2, 3, 224, 224), 128.0)
+    monkeypatch.setattr(
+        vitcore_model._mtcnn, "detect",
+        lambda img: (
+            np.array([[0, 0, 100, 100], [120, 120, 224, 224]]),
+            np.array([0.999, 0.5]),  # second detection is below the gate
+        ),
+    )
+    monkeypatch.setattr(
+        type(vitcore_model._mtcnn), "__call__", lambda self, img: fake_face_tensors
+    )
+
+    blank = Image.fromarray(np.full((224, 224, 3), 128, dtype=np.uint8))
+    faces = vitcore_model.analyze_all_faces(blank, generate_explainability=False)
+    assert len(faces) == 1
 
 
 def test_quality_assessment_thresholds():

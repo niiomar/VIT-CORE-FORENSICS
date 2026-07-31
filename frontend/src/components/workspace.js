@@ -22,6 +22,15 @@ export function renderWorkspace() {
           <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
           POOR EVIDENCE QUALITY — The detected face is highly degraded or blurry.
         </div>
+        <div class="warning-banner warn-blue" id="disposition-banner">
+          <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <span id="disposition-text"></span>
+        </div>
+
+        <div class="face-list" id="face-list" style="display:none;">
+          <div class="face-list-heading">Per-Face Verdicts</div>
+          <div id="face-list-rows"></div>
+        </div>
 
         <div class="executive-panel">
           <div class="exec-left">
@@ -130,6 +139,14 @@ export function renderWorkspace() {
           <button id="export-btn" class="secondary-btn">Export Forensic Report (.PDF)</button>
         </div>
 
+      </div>
+
+      <div id="batch-state">
+        <div class="batch-header">
+          <h2>Batch Screening Results</h2>
+          <div class="batch-summary" id="batch-summary"></div>
+        </div>
+        <div class="batch-list" id="batch-list"></div>
       </div>
     </main>
   `;

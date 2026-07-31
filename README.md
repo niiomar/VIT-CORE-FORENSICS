@@ -58,6 +58,7 @@ Upload → MTCNN face extraction → Face quality assessment (3-tier: Poor / Fai
 
 ## Key Features
 
+- **Multi-Face Detection** — Every face in an image is detected and scored independently; a group photo gets one verdict per person instead of silently picking just one. Video aggregates only the primary face per frame (no cross-frame identity tracking), and flags when more than one subject is present so it isn't mistaken for a single-subject verdict.
 - **Attention Rollout Heatmaps** — Native QKV hooks on the final transformer block reconstruct the self-attention matrix directly, bypassing PyTorch's fused SDPA path which breaks naive gradient-based hooks. Produces a spatial map of which facial regions drove the classification.
 - **Conservative Frame Aggregation** — For video input, the reported face-quality metric is anchored to the *worst* quality observed across all sampled frames — a single blurry frame degrades the reported confidence for the whole clip.
 - **Confidence-Weighted Logits** — Per-frame probabilities are aggregated with weights proportional to `|p - 0.5|`, so high-certainty frames dominate the final score and near-ambiguous frames are discounted.
@@ -190,10 +191,12 @@ All configuration is via environment variables loaded from `.env` files. These a
 | `API_KEY` | *(unset)* | Shared secret for `X-API-KEY` header auth. If unset, the API is unauthenticated — acceptable for local use, not for any exposed deployment. |
 | `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated allowed frontend origins. |
 | `MODEL_WEIGHTS_PATH` | `vitcore_best.pth` | Path to the trained checkpoint, relative to `backend/`. |
+| `MODEL_WEIGHTS_SHA256` | *(unset)* | Optional expected SHA-256 of the checkpoint. If set, the backend refuses to start on a mismatch. The actual hash is always logged at startup so you can capture and pin it. |
 | `AUDIT_DB_PATH` | `audit_log.db` | Path to the SQLite audit log file. |
 | `RATE_LIMIT_REQUESTS` | `20` | Max requests per client (by API key, or IP if unauthenticated) within the sliding window. Set to `0` to disable. |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Sliding window size, in seconds, for rate limiting. |
 | `BATCH_CONCURRENCY` | `4` | Max files from a `/api/v1/analyze/batch` request processed concurrently. Model inference itself is serialized internally; this bounds concurrent I/O (video decode, hashing). |
+| `LOG_FORMAT` | `text` | `text` for human-readable console logs, or `json` for structured logs (with a `request_id` field) suitable for a log aggregator. |
 
 ### `frontend/.env`
 
@@ -249,9 +252,29 @@ Analyze a single image or video file.
   "is_low_confidence": true,
   "explainability_maps": ["<base64 JPEG>"],
   "filename": "evidence.jpg",
+  "multiple_faces_detected": false,
   "file_sha256": "..."
 }
 ```
+
+`verdict`/`confidence`/`probability` always reflect the primary (largest)
+face. If a single-image upload contains more than one face, the response
+also includes a `faces` array with an independent verdict per face:
+
+```json
+"multiple_faces_detected": true,
+"faces": [
+  { "probability": 0.37, "verdict": "REAL", "confidence": 63.0, "face_quality": "Poor" },
+  { "probability": 0.82, "verdict": "FAKE", "confidence": 82.0, "face_quality": "Fair" }
+],
+"disposition": "2 faces detected in this image — see 'faces' for independent per-face verdicts. ..."
+```
+
+For video, faces aren't tracked across frames (see
+[Model Card](MODEL_CARD.md#known-limitations)), so multiple faces in a clip
+only set `multiple_faces_detected` and a `disposition` note — there's no
+per-face breakdown, to avoid implying a cross-frame identity match that
+wasn't actually verified.
 
 ### `POST /api/v1/analyze/batch`
 
@@ -274,7 +297,19 @@ Returns all past analyses for a specific file hash.
 
 ### `GET /health`
 
-Liveness check. Returns `{"status": "ok", "version": "2.0.0"}`.
+Readiness check — reflects whether the model actually loaded, not just
+whether the process is up. Returns HTTP 200 with `{"status": "ok", "version": "2.0.0", "model_loaded": true, "device": "cpu", "weights_path": "...", "weights_found": true}`,
+or HTTP 503 with `"status": "degraded"` if the model never loaded (e.g.
+missing weights).
+
+### `GET /metrics`
+
+Prometheus scrape endpoint (request counts, latency histograms, batch size
+distribution). Unauthenticated, like `/health` — restrict network access to
+it at the reverse-proxy/firewall level in any exposed deployment.
+
+Every response also carries an `X-Request-ID` header (or echoes an inbound
+one from a reverse proxy) for correlating a request with server-side logs.
 
 ---
 
@@ -330,14 +365,19 @@ Open **http://localhost:8000**.
 ### Running tests
 
 ```bash
+# Backend
 cd backend
 pip install -r requirements-dev.txt
 pytest tests/ -v
+
+# Frontend
+cd ../frontend
+npm test
 ```
 
 ### CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU smoke test with untrained weights, and a frontend production build.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU smoke test with untrained weights, frontend unit tests, a frontend production build, and informational `pip-audit`/`npm audit` dependency scans.
 
 ---
 

@@ -161,6 +161,11 @@ body {
 .banner-icon { width: 14px; height: 14px; flex-shrink: 0; margin-right: 12px; }
 .warn-amber { border-color: var(--amber); color: var(--amber); border-left: 4px solid var(--amber); } .warn-amber .banner-icon { stroke: var(--amber); }
 .warn-red   { border-color: var(--red);   color: var(--red);   border-left: 4px solid var(--red); }   .warn-red .banner-icon   { stroke: var(--red); }
+.warn-blue  { border-color: var(--blue);  color: var(--text-mid); border-left: 4px solid var(--blue); font-weight: 400; text-transform: none; letter-spacing: normal; } .warn-blue .banner-icon { stroke: var(--blue); }
+
+/* Per-face breakdown (multi-face images) */
+.face-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 900px; margin: 0 auto 16px; }
+.face-list-heading { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
 
 /* Executive Panel & Visual Trust Ring */
 /* Contains the primary SVG verdict ring and top-level analytic metrics */
@@ -229,3 +234,23 @@ body {
 .export-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; display: flex; justify-content: center; width: 100%; max-width: 900px; margin-left: auto; margin-right: auto;}
 .secondary-btn { padding: 10px 24px; background: var(--bg); color: var(--text-mid); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; font-weight: 700; cursor: pointer; transition: .2s; text-transform: uppercase; letter-spacing: 1px; width: 100%; }
 .secondary-btn:hover { border-color: var(--text-hi); color: var(--text-hi); background: rgba(255,255,255,0.05); }
+
+/* Batch Screening Results */
+#batch-state { display: none; width: 100%; max-width: 900px; margin: 0 auto; animation: fadeIn 0.4s ease; flex-direction: column; gap: 16px; }
+#batch-state.visible { display: flex; }
+.batch-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.batch-header h2 { font-family: var(--mono); font-size: 13px; color: var(--text-hi); text-transform: uppercase; letter-spacing: 1px; }
+.batch-summary { display: flex; gap: 16px; font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; }
+.batch-summary strong { font-size: 13px; color: var(--text-hi); margin-left: 4px; }
+.batch-summary .batch-real strong { color: var(--green); }
+.batch-summary .batch-fake strong { color: var(--red); }
+.batch-summary .batch-error strong { color: var(--red); }
+.batch-list { display: flex; flex-direction: column; gap: 8px; max-height: 65vh; overflow-y: auto; }
+.batch-row { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
+.batch-row-error { border-color: rgba(248,81,73,.3); }
+.batch-row-name { flex: 1; font-size: 11px; color: var(--text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-row-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 4px; background: var(--surface2); border: 1px solid transparent; flex-shrink: 0; }
+.batch-row-badge.real { color: var(--green); border-color: rgba(63,185,80,.2); }
+.batch-row-badge.fake { color: var(--red); border-color: rgba(248,81,73,.2); }
+.batch-row-badge.error { color: var(--red); border-color: rgba(248,81,73,.2); }
+.batch-row-detail { font-family: var(--mono); font-size: 9px; color: var(--text-dim); flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -13,20 +13,23 @@ import cv2
 import tempfile
 from contextlib import asynccontextmanager
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from model import analyze_frame, get_models
+from model import analyze_all_faces, get_models, get_status
 from auth import verify_api_key
 from ratelimit import enforce_rate_limit
+from version import MODEL_VERSION
+from observability import (
+    configure_logging, ObservabilityMiddleware, metrics_response, BATCH_SIZE,
+)
 import audit
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+configure_logging()
 logger = logging.getLogger(__name__)
 
-MODEL_VERSION = "2.0.0"
 SUPPORTED_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv', '.webm', '.jpg', '.jpeg', '.png', '.webp', '.bmp')
 
 @asynccontextmanager
@@ -58,6 +61,11 @@ app.add_middleware(
     allow_methods=["*"],  # Allows OPTIONS pre-flight checks required by browsers
     allow_headers=["*"],  # Allows custom headers like X-API-KEY
 )
+
+# Assigns/propagates a request ID (X-Request-ID) for log correlation and
+# records Prometheus metrics for every request. Added last so it's the
+# outermost middleware and its timing captures CORS handling too.
+app.add_middleware(ObservabilityMiddleware)
 
 # Frame extraction
 #
@@ -119,22 +127,39 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
 
     frame_data = []
     heatmaps = []
+    max_faces_in_a_frame = 0
+    single_image_faces = None  # populated only when len(frames) == 1
 
     for frame in frames:
-        prob, face_detected, face_quality, heatmap = analyze_frame(frame, generate_explainability=explain)
-        
-        # Only append valid inference data.
-        # If prob is None (no face), face_detected is False.
+        # Every face in the frame is detected and scored independently;
+        # the primary (largest) face drives the existing frame-level
+        # aggregation below, unchanged from the single-face behavior this
+        # was built around. There's no face-identity tracking across
+        # frames, so a full per-face breakdown is only trustworthy for a
+        # single image — see the `faces` field built after this loop.
+        faces = analyze_all_faces(frame, generate_explainability=explain)
+        max_faces_in_a_frame = max(max_faces_in_a_frame, len(faces))
+
+        if not faces:
+            frame_data.append({"probability": None, "face_detected": False, "quality": {"valid": False, "status": "N/A", "blur": 0}})
+            continue
+
+        primary = faces[0]
         frame_data.append({
-            "probability": prob,
-            "face_detected": face_detected,
-            "quality": face_quality,
+            "probability": primary["probability"],
+            "face_detected": True,
+            "quality": primary["quality"],
         })
-        # analyze_frame returns a dict of base64-encoded visuals
+        # visuals is a dict of base64-encoded images
         # ({"heatmap", "patches", "attention"}); the API only surfaces the
         # blended JET heatmap, matching the documented response shape.
-        if heatmap and heatmap.get("heatmap"):
-            heatmaps.append(heatmap["heatmap"])
+        if primary["visuals"].get("heatmap"):
+            heatmaps.append(primary["visuals"]["heatmap"])
+
+        # A single-image upload has no cross-frame identity ambiguity, so
+        # every detected face can be safely scored and reported on its own.
+        if len(frames) == 1:
+            single_image_faces = faces
 
     # Filter out None probabilities (where MTCNN bypassed the ViT)
     probs = [f["probability"] for f in frame_data if f["probability"] is not None]
@@ -178,9 +203,40 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
         "is_low_confidence": False if agg_prob is None else (0.4 < agg_prob < 0.6),
         "explainability_maps": heatmaps,
         "filename": filename,
+        "multiple_faces_detected": max_faces_in_a_frame > 1,
     }
 
-    # Pass the disposition override up if we bypassed
+    if single_image_faces is not None and len(single_image_faces) > 1:
+        # Independent per-face verdicts — safe for a single image since
+        # there's no cross-frame identity to conflate. The top-level
+        # verdict above still reflects only the primary (largest) face.
+        result["faces"] = [
+            {
+                "probability": round(f["probability"], 4),
+                "verdict": "FAKE" if f["probability"] >= 0.5 else "REAL",
+                "confidence": round((f["probability"] if f["probability"] >= 0.5 else 1 - f["probability"]) * 100, 1),
+                "face_quality": f["quality"]["status"],
+            }
+            for f in single_image_faces
+        ]
+        disposition_override = (
+            f"{len(single_image_faces)} faces detected in this image — see 'faces' for "
+            "independent per-face verdicts. The top-level verdict reflects the primary "
+            "(largest) face only."
+        )
+    elif max_faces_in_a_frame > 1:
+        # Video: we deliberately don't attempt to aggregate multiple faces
+        # across frames without identity tracking — doing so would risk
+        # silently blending different people's probabilities into one
+        # misleading number. Surface the limitation instead.
+        disposition_override = (
+            f"Multiple faces detected in at least one frame (up to {max_faces_in_a_frame}). "
+            "The verdict aggregates only the primary (largest) face per frame — this may not "
+            "represent every subject in the video. Manual review recommended for multi-subject footage."
+        )
+
+    # Pass the disposition override up if we bypassed, or if a multi-face
+    # note applies
     if disposition_override:
         result["disposition"] = disposition_override
 
@@ -232,6 +288,7 @@ async def analyze_batch(files: list[UploadFile] = File(...), explain: bool = Que
         raise HTTPException(status_code=400, detail="Batch size limited to 50 files per request.")
 
     logger.info(f"Batch analyzing {len(files)} assets")
+    BATCH_SIZE.observe(len(files))
 
     semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 
@@ -271,7 +328,25 @@ async def history_by_hash(file_hash: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": MODEL_VERSION}
+    status = get_status()
+    body = {"status": "ok" if status["model_loaded"] else "degraded", "version": MODEL_VERSION, **status}
+    if not status["model_loaded"]:
+        # A process that's up but never actually loaded the model (missing
+        # weights, a load-time exception swallowed elsewhere) isn't really
+        # healthy — it'll 500 on the first real request. Returning non-2xx
+        # here is what makes the Docker/compose HEALTHCHECK meaningful
+        # instead of just checking the port is open.
+        raise HTTPException(status_code=503, detail=body)
+    return body
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus scrape endpoint. Deliberately unauthenticated (like
+    /health) to match standard scraper setups — restrict network access to
+    it at the reverse-proxy/firewall level in any exposed deployment,
+    same as you would for any other internal metrics endpoint."""
+    body, content_type = metrics_response()
+    return Response(content=body, media_type=content_type)
 
 # Static File Serving
 

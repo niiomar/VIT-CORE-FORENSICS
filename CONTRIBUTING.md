@@ -22,10 +22,11 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-And confirm the frontend builds cleanly:
+And run the frontend tests and confirm it builds cleanly:
 
 ```bash
 cd frontend
+npm test
 npm run build
 ```
 
