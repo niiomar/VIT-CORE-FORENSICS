@@ -298,7 +298,7 @@ Returns all past analyses for a specific file hash.
 ### `GET /health`
 
 Readiness check — reflects whether the model actually loaded, not just
-whether the process is up. Returns HTTP 200 with `{"status": "ok", "version": "2.0.0", "model_loaded": true, "device": "cpu", "weights_path": "...", "weights_found": true}`,
+whether the process is up. Returns HTTP 200 with `{"status": "ok", "version": "2.1.0", "model_loaded": true, "device": "cpu", "weights_path": "...", "weights_found": true}`,
 or HTTP 503 with `"status": "degraded"` if the model never loaded (e.g.
 missing weights).
 

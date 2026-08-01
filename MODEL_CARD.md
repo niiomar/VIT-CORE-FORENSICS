@@ -102,4 +102,5 @@ Human review and corroborating evidence are recommended before use in investigat
 
 | Version | Date | Notes |
 |----------|----------|----------|
+| 2.1.0 | 2026 | Deployment layer: independent multi-face scoring for single images, batch-analysis UI, request-ID/structured-logging/Prometheus observability, checkpoint SHA-256 integrity check, sliding-window rate limiting. Underlying model weights/architecture unchanged from 2.0.0. |
 | 2.0.0 | 2026 | ViT-S/16 backbone, MSE consistency regularization, cross-domain evaluation on Celeb-DF, DFDC-Preview, and WildDeepfake |
