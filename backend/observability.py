@@ -97,7 +97,13 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             _request_id_ctx.reset(token)
 
         duration = time.monotonic() - start
-        path = request.url.path
+        # Route *template* (e.g. "/api/v1/history/{file_hash}"), not the
+        # resolved path — using the raw path would give every distinct file
+        # hash, static asset filename, or 404-probe its own Prometheus label,
+        # growing cardinality unboundedly. Unmatched routes (404s) share one
+        # "unmatched" bucket for the same reason.
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or "unmatched"
         REQUEST_COUNT.labels(request.method, path, response.status_code).inc()
         REQUEST_LATENCY.labels(request.method, path).observe(duration)
         response.headers["X-Request-ID"] = request_id
