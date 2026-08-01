@@ -7,6 +7,23 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
 
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat-square&logo=prometheus&logoColor=white)
+
+---
+
+## Screenshots
+
+| Workspace | Attention Rollout Heatmap |
+|---|---|
+| ![Workspace idle state](docs/assets/screenshot-workspace.png) | ![Analysis result with heatmap](docs/assets/screenshot-heatmap.png) |
+
+> The heatmap screenshot renders the real frontend against illustrative demo data (not a live inference), so the UI shown is exactly what ships — just fed a controlled response for a clean capture. The workspace screenshot is the live app with no data involved.
+
 ---
 
 ## Table of Contents
@@ -47,11 +64,36 @@ The classifier departs from standard CNN-based detection by using a self-attenti
 
 ### Inference Pipeline
 
+```mermaid
+flowchart LR
+    A["Upload"] --> B["MTCNN<br/>Face Extraction"]
+    B --> C["Face Quality<br/>Poor / Fair / High"]
+    C --> D["4-view TTA<br/>orig · flip · crop · crop+flip"]
+    D --> E["ViT-S/16<br/>Forward Pass"]
+    E --> F["Confidence-Weighted<br/>Aggregation"]
+    F --> G["Attention Rollout<br/>Heatmap"]
+    G --> H[("Audit Log")]
+    H --> I["JSON Response"]
 ```
-Upload → MTCNN face extraction → Face quality assessment (3-tier: Poor / Fair / High)
-       → 4-view Test-Time Augmentation (orig / h-flip / center-crop / crop+flip)
-       → ViT-S/16 forward pass → Confidence-weighted aggregation across frames
-       → Attention Rollout heatmap (optional) → Audit log entry → JSON response
+
+### Request Flow
+
+```mermaid
+flowchart TB
+    subgraph Client
+        FE["Vite Frontend<br/>single-file / batch UI"]
+    end
+    subgraph Server["FastAPI Backend"]
+        MW["Rate Limiter + Auth<br/>+ Observability Middleware"]
+        API["Routes<br/>analyze / batch / history"]
+        MODEL["model.py<br/>ViT-S/16 inference"]
+        DB[("audit.py<br/>SQLite audit log")]
+        MET["/metrics<br/>Prometheus"]
+    end
+    FE -- "X-API-KEY" --> MW --> API
+    API --> MODEL
+    API --> DB
+    MW --> MET
 ```
 
 ---
@@ -62,9 +104,11 @@ Upload → MTCNN face extraction → Face quality assessment (3-tier: Poor / Fai
 - **Attention Rollout Heatmaps** — Native QKV hooks on the final transformer block reconstruct the self-attention matrix directly, bypassing PyTorch's fused SDPA path which breaks naive gradient-based hooks. Produces a spatial map of which facial regions drove the classification.
 - **Conservative Frame Aggregation** — For video input, the reported face-quality metric is anchored to the *worst* quality observed across all sampled frames — a single blurry frame degrades the reported confidence for the whole clip.
 - **Confidence-Weighted Logits** — Per-frame probabilities are aggregated with weights proportional to `|p - 0.5|`, so high-certainty frames dominate the final score and near-ambiguous frames are discounted.
-- **Forensic Audit Log** — Every analysis is recorded in an append-only SQLite log keyed by the SHA-256 hash of the input file, alongside verdict, confidence, model version, and timestamp — supporting "has this exact file been analysed before" lookups.
-- **Batch Analysis** — `/api/v1/analyze/batch` accepts up to 50 files per request for evidence-set screening, with per-file error isolation.
+- **Forensic Audit Log** — Every analysis is recorded in an append-only, WAL-mode SQLite log keyed by the SHA-256 hash of the input file, alongside verdict, confidence, model version, and timestamp — supporting "has this exact file been analysed before" lookups.
+- **Batch Analysis** — `/api/v1/analyze/batch` accepts up to 50 files per request, processed with bounded concurrency, with per-file error isolation and a live batch-results UI.
 - **Sliding-Window Rate Limiting** — Native request throttling protects inference compute from automated abuse.
+- **Observability** — Request-ID log correlation, optional structured JSON logging, and a Prometheus `/metrics` endpoint (request counts, latency, batch size) with bounded label cardinality.
+- **Checkpoint Integrity Verification** — The model checkpoint's SHA-256 is logged at startup and can be pinned via an env var, so a corrupted or tampered checkpoint fails loudly instead of producing silently-wrong verdicts.
 - **PDF Report Export** — One-click forensic report generation (verdict, confidence, heatmap) via `jsPDF`.
 
 ---
@@ -77,31 +121,37 @@ ViT-CORE-FORENSICS/
 │   ├── main.py              # FastAPI app: routes, rate limiting, CORS, lifespan
 │   ├── model.py             # PyTorch inference, MTCNN, TTA, attention rollout
 │   ├── auth.py              # API key dependency (optional, env-gated)
-│   ├── audit.py             # SQLite forensic audit log
+│   ├── audit.py             # SQLite forensic audit log (WAL mode)
+│   ├── ratelimit.py         # Sliding-window rate limiter
+│   ├── observability.py     # Request IDs, structured logging, Prometheus metrics
+│   ├── version.py           # Single source of truth for MODEL_VERSION
 │   ├── requirements.txt     # Python dependencies (NumPy < 2.0 locked)
 │   ├── requirements-dev.txt # Test-only deps (pytest) — not needed at runtime
 │   ├── .env.example         # Backend config template — copy to .env
 │   ├── weights/             # Place vitcore_best.pth here (download from Releases)
 │   ├── static/              # Vite build output — generated, not tracked in git
 │   └── tests/
-│       └── test_smoke.py    # CPU smoke test for CI
+│       ├── test_smoke.py    # Inference-pipeline tests (model.py, direct calls)
+│       └── test_api.py      # HTTP-layer tests (main.py, via FastAPI TestClient)
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── app.js           # Entry point — UI logic, fetch calls, state
+│   │   ├── components/      # sidebar.js, workspace.js, history.js
 │   │   ├── styles.css
-│   │   └── utils/           # api.js, report.js
+│   │   └── utils/           # api.js, report.js (+ *.test.js — Vitest)
 │   ├── index.html
 │   ├── .env.example         # Frontend config template — copy to .env
 │   ├── package.json
 │   └── vite.config.js       # Build output → ../backend/static
 │
-├── .github/workflows/ci.yml  # Compile-check, smoke test, frontend build
+├── docs/assets/               # README screenshots
+├── .github/workflows/ci.yml   # Compile-check, tests, builds, dependency audits
 ├── .gitignore
 ├── CONTRIBUTING.md
-├── Dockerfile                # Multi-stage: Vite build → Python runtime
+├── Dockerfile                 # Multi-stage: Vite build → Python runtime
 ├── docker-compose.yml
-├── MODEL_CARD.md             # Training data, benchmarks, known limitations
+├── MODEL_CARD.md              # Training data, benchmarks, known limitations
 ├── SECURITY.md
 └── LICENSE
 ```
@@ -218,7 +268,7 @@ cp frontend/.env.example frontend/.env
 docker compose up --build
 ```
 
-This runs a multi-stage build (Vite → Python/FastAPI runtime) and serves the application on **http://localhost:8000**. Model weights and the audit database are mounted as volumes so they persist across container rebuilds.
+This runs a multi-stage build (Vite → Python/FastAPI runtime) and serves the application on **http://localhost:8000**. Model weights and the audit database are mounted as volumes so they persist across container rebuilds. The image runs as a non-root user with a healthcheck against `/health`.
 
 To enable GPU inference, uncomment the `deploy.resources` block in `docker-compose.yml` (requires the NVIDIA Container Toolkit).
 
@@ -226,7 +276,7 @@ To enable GPU inference, uncomment the `deploy.resources` block in `docker-compo
 
 ## API Reference
 
-All endpoints except `/health` and `/` require the `X-API-KEY` header when `API_KEY` is set.
+All endpoints except `/health`, `/metrics`, and `/` require the `X-API-KEY` header when `API_KEY` is set.
 
 ### `POST /api/v1/analyze`
 
@@ -278,7 +328,7 @@ wasn't actually verified.
 
 ### `POST /api/v1/analyze/batch`
 
-Analyze up to 50 files in one request. `explain` defaults to `false`.
+Analyze up to 50 files in one request, processed with bounded concurrency (`BATCH_CONCURRENCY`). `explain` defaults to `false`.
 
 ```json
 {
@@ -305,8 +355,9 @@ missing weights).
 ### `GET /metrics`
 
 Prometheus scrape endpoint (request counts, latency histograms, batch size
-distribution). Unauthenticated, like `/health` — restrict network access to
-it at the reverse-proxy/firewall level in any exposed deployment.
+distribution — labeled by route template, not raw resolved path, to keep
+cardinality bounded). Unauthenticated, like `/health` — restrict network
+access to it at the reverse-proxy/firewall level in any exposed deployment.
 
 Every response also carries an `X-Request-ID` header (or echoes an inbound
 one from a reverse proxy) for correlating a request with server-side logs.
@@ -365,7 +416,7 @@ Open **http://localhost:8000**.
 ### Running tests
 
 ```bash
-# Backend
+# Backend (inference-pipeline + HTTP-layer tests)
 cd backend
 pip install -r requirements-dev.txt
 pytest tests/ -v
@@ -377,7 +428,7 @@ npm test
 
 ### CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU smoke test with untrained weights, frontend unit tests, a frontend production build, and informational `pip-audit`/`npm audit` dependency scans.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU tests (inference pipeline + HTTP layer) with untrained weights, frontend unit tests, a frontend production build, and informational `pip-audit`/`npm audit` dependency scans.
 
 ---
 
