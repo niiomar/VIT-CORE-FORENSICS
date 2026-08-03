@@ -69,3 +69,27 @@ jobs:
         # see that step's comment.
         continue-on-error: true
         run: npm audit --audit-level=high
+
+  docker:
+    # Building/running the image was previously only ever checked by
+    # reading the Dockerfile, never by actually running it — that let a
+    # broken base-image pin, a wrong COPY source path, and two mismatched
+    # volume-mount paths ship unnoticed. This job builds and boots the real
+    # image on every push so that class of bug fails CI instead of being
+    # discovered manually.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build --build-arg VITE_API_KEY=ci-placeholder-key -t vitcore-forensics-ci .
+
+      - name: Run container (no real weights — same untrained-model path as the backend smoke test)
+        run: docker run -d --name ci-test -p 8000:8000 -e API_KEY=ci-placeholder-key vitcore-forensics-ci
+
+      - name: Wait for /health
+        run: timeout 60 bash -c 'until curl -sf http://localhost:8000/health; do sleep 2; done'
+
+      - name: Show logs
+        if: always()
+        run: docker logs ci-test
