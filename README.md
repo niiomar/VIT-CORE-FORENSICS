@@ -125,14 +125,16 @@ ViT-CORE-FORENSICS/
 │   ├── ratelimit.py         # Sliding-window rate limiter
 │   ├── observability.py     # Request IDs, structured logging, Prometheus metrics
 │   ├── version.py           # Single source of truth for MODEL_VERSION
+│   ├── export_audit_log.py  # Read-only audit log export (CSV/JSON), no server needed
 │   ├── requirements.txt     # Python dependencies (NumPy < 2.0 locked)
 │   ├── requirements-dev.txt # Test-only deps (pytest) — not needed at runtime
 │   ├── .env.example         # Backend config template — copy to .env
 │   ├── weights/             # Place vitcore_best.pth here (download from Releases)
 │   ├── static/              # Vite build output — generated, not tracked in git
 │   └── tests/
-│       ├── test_smoke.py    # Inference-pipeline tests (model.py, direct calls)
-│       └── test_api.py      # HTTP-layer tests (main.py, via FastAPI TestClient)
+│       ├── test_smoke.py            # Inference-pipeline tests (model.py, direct calls)
+│       ├── test_api.py              # HTTP-layer tests (main.py, via FastAPI TestClient)
+│       └── test_export_audit_log.py # Audit log export tests
 │
 ├── frontend/
 │   ├── src/
@@ -375,8 +377,20 @@ Training data, benchmark results (FaceForensics++ / CelebDF / DFDC), and known l
 - **The frontend API key is not a secret.** `VITE_API_KEY` is compiled into the publicly-served JS bundle and is visible to anyone who inspects the source. The `X-API-KEY` mechanism is a basic access gate suitable for internal or pilot deployments — it is not a substitute for proper access control.
 - **Recommended production setup:** deploy behind a reverse proxy (Nginx, Caddy) with IP allowlisting or mutual TLS. Treat `API_KEY` as a secondary layer, not the primary security boundary.
 - **CORS** is locked to explicit origins via `CORS_ORIGINS`. Do not set this to `*` in any deployment handling real evidence.
-- **Audit log** (`audit_log.db`) records file hashes and filenames of all analysed media. Treat it as sensitive operational data — back it up and restrict access per your organization's evidence-handling policy.
+- **Audit log** (`audit_log.db`) records file hashes and filenames of all analysed media. Treat it as sensitive operational data — back it up and restrict access per your organization's evidence-handling policy. To export entries (for a compliance handoff, or to archive before a purge), see `backend/export_audit_log.py` below — this project deliberately does not implement automatic retention/purge/redaction, since that's an organizational policy decision, not something safe to guess at.
 - Results are **probabilistic screening outputs only**. They should be treated as one input to a broader investigation, not as standalone conclusions.
+
+### Exporting the audit log
+
+```bash
+cd backend
+python export_audit_log.py --format csv --output export.csv
+python export_audit_log.py --format json --since 2026-01-01 --until 2026-06-30
+python export_audit_log.py --file-hash <sha256>          # all past analyses of one file
+python export_audit_log.py --db /path/to/backup/audit_log.db  # run against a backup, no server needed
+```
+
+Read-only and operates directly on the SQLite file — no running server required, so it works equally well against a live `audit_log.db` or a backed-up copy.
 
 ---
 
