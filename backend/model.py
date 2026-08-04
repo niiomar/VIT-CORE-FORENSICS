@@ -80,9 +80,25 @@ def load_models():
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=True)
             sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
         except Exception:
+            # weights_only=True (safe, restricted unpickler) failed — the
+            # checkpoint likely predates it or uses a non-tensor container.
+            # Falling back to full pickle deserialization is a real code-
+            # execution risk if the file isn't trusted, so require an
+            # explicit opt-in rather than silently downgrading. The SHA-256
+            # check above already guards against a corrupted/swapped file;
+            # this guards against ever reaching unsafe deserialization
+            # without the operator having deliberately allowed it.
+            if os.getenv("ALLOW_UNTRUSTED_CHECKPOINT", "").strip().lower() not in ("1", "true", "yes"):
+                raise RuntimeError(
+                    f"Checkpoint at {CHECKPOINT_PATH} failed to load with weights_only=True "
+                    "(the safe loader) and ALLOW_UNTRUSTED_CHECKPOINT is not set. Refusing to "
+                    "fall back to full pickle deserialization of an unverified checkpoint. If "
+                    "you trust this file's origin, set ALLOW_UNTRUSTED_CHECKPOINT=true."
+                )
             import logging as _log
             _log.getLogger(__name__).warning(
-                "weights_only=True failed — falling back. Only safe with trusted checkpoints."
+                "weights_only=True failed — falling back to weights_only=False "
+                "(ALLOW_UNTRUSTED_CHECKPOINT is set). Only safe with trusted checkpoints."
             )
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
             sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt

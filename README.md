@@ -244,6 +244,7 @@ All configuration is via environment variables loaded from `.env` files. These a
 | `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated allowed frontend origins. |
 | `MODEL_WEIGHTS_PATH` | `vitcore_best.pth` | Path to the trained checkpoint, relative to `backend/`. |
 | `MODEL_WEIGHTS_SHA256` | *(unset)* | Optional expected SHA-256 of the checkpoint. If set, the backend refuses to start on a mismatch. The actual hash is always logged at startup so you can capture and pin it. |
+| `ALLOW_UNTRUSTED_CHECKPOINT` | `false` | If the checkpoint can't load with PyTorch's safe `weights_only=True` loader, the backend refuses to start rather than silently falling back to full pickle deserialization. Set `true` only if you trust the checkpoint's origin. |
 | `AUDIT_DB_PATH` | `audit_log.db` | Path to the SQLite audit log file. |
 | `RATE_LIMIT_REQUESTS` | `20` | Max requests per client (by API key, or IP if unauthenticated) within the sliding window. Set to `0` to disable. |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Sliding window size, in seconds, for rate limiting. |

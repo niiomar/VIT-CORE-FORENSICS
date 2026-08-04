@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Explicit minimal scope for the auto-issued GITHUB_TOKEN. Without this,
+# it defaults to broad repo permissions even though this workflow only
+# ever needs to read the checked-out code — nothing here writes commits,
+# comments, releases, or packages.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
