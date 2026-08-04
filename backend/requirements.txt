@@ -9,7 +9,7 @@ prometheus-client>=0.20.0
 
 # Core Machine Learning & Vision
 torch>=2.0.0
-torchvision>=0.15.0
+torchvision>=0.28.0
 timm>=0.9.0
 facenet-pytorch>=2.5.3
 
