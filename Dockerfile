@@ -18,7 +18,7 @@ RUN npm run build
 # below were pinned, breaking the build entirely (libglib2.0-0 was renamed to
 # libglib2.0-0t64, and none of the exact versions existed anymore). Pinning the
 # OS release is what actually makes the version pins below meaningful.
-FROM python:3.11-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 
 # OpenCV needs these system libs. Versions pinned for reproducible builds —
 # update periodically with: apt-cache show <pkg> | grep Version
