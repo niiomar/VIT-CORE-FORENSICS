@@ -1,20 +1,20 @@
 # Web & API Framework
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
-python-multipart>=0.0.9
+python-multipart>=0.0.32
 python-dotenv>=1.0.0
 
 # Observability
-prometheus-client>=0.20.0
+prometheus-client>=0.26.0
 
 # Core Machine Learning & Vision
 torch>=2.0.0
-torchvision>=0.15.0
+torchvision>=0.28.0
 timm>=0.9.0
 facenet-pytorch>=2.5.3
 
 # Image & Video Processing
-Pillow>=10.0.0
+Pillow>=12.3.0
 opencv-python-headless>=4.8.0
 
 # Critical Security Dependency Lock (Prevents ABI crash)
