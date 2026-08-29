@@ -1,14 +1,14 @@
 """
 PyTorch inference pipeline: MTCNN face detection, test-time augmentation,
 the ViT-S/16 forward pass, and attention-rollout heatmap generation.
-
+ 
 analyze_all_faces is the core entry point — it detects and independently
 scores every face in an image. analyze_frame is a thin backward-compatible
 wrapper over it that returns only the primary (largest) face, which is what
 main.py's video-frame aggregation uses (see analyze_all_faces's docstring
 for why per-face results aren't safely aggregable across video frames).
 """
-
+ 
 import hashlib
 import os
 import threading
@@ -21,28 +21,47 @@ from torchvision.transforms import functional as F
 from timm.models import vit_small_patch16_224
 from PIL import Image
 from facenet_pytorch import MTCNN
-
+ 
 CHECKPOINT_PATH = os.getenv("MODEL_WEIGHTS_PATH", "vitcore_best.pth")
 CHECKPOINT_SHA256 = os.getenv("MODEL_WEIGHTS_SHA256", "").strip().lower()
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+ 
 _model = None
 _mtcnn = None
 _attention_cache = {}
-
+ 
 # analyze_frame is invoked from worker threads (see main.py's use of
 # asyncio.to_thread) so batches don't block the event loop. The QKV hook
 # populates _attention_cache as a side effect of the forward pass, so the
 # forward pass + heatmap read must be serialized to avoid one thread reading
 # another thread's attention matrix.
 _inference_lock = threading.Lock()
-
+ 
+# PyTorch 2.6 defaults torch.load to weights_only=True (a restricted
+# unpickler that only allows a small set of known-safe types), specifically
+# to stop a malicious checkpoint from executing arbitrary code on load.
+# This checkpoint's saved dict contains a numpy scalar (near-certainly a
+# metric like best_auc saved straight from sklearn without casting to a
+# native Python float), which isn't on the default allowlist. Allowlisting
+# exactly this one type — rather than disabling the safe loader entirely —
+# keeps weights_only=True's protection intact for everything else in the
+# file; the genuine "this checkpoint needs full unsafe unpickling" path
+# below still stays gated behind ALLOW_UNTRUSTED_CHECKPOINT.
+#
+# numpy._core.multiarray needs to be explicitly imported before this
+# reference: importing the top-level `numpy` package doesn't automatically
+# bind its `multiarray` submodule as an attribute of `numpy._core` on every
+# numpy version, so referencing np._core.multiarray without this import can
+# raise AttributeError even though numpy._core itself exists.
+import numpy._core.multiarray
+torch.serialization.add_safe_globals([np._core.multiarray.scalar])
+ 
 NORMALIZE = transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3)
-
+ 
 # Quality ranking used for conservative aggregation across video frames.
 # Higher = better.
 QUALITY_RANK = {"Poor": 0, "N/A": 0, "Fair": 1, "High": 2}
-
+ 
 def _verify_checkpoint_integrity(path: str) -> None:
     """Hash the checkpoint and log it, so an operator can capture it once
     from a known-good load and pin it via MODEL_WEIGHTS_SHA256. If that env
@@ -55,14 +74,14 @@ def _verify_checkpoint_integrity(path: str) -> None:
             sha256.update(chunk)
     digest = sha256.hexdigest()
     print(f"[ViT-CORE] Checkpoint SHA-256: {digest}")
-
+ 
     if CHECKPOINT_SHA256 and digest != CHECKPOINT_SHA256:
         raise RuntimeError(
             f"Checkpoint integrity check failed for {path}: expected "
             f"{CHECKPOINT_SHA256}, got {digest}. Refusing to load a "
             f"checkpoint that doesn't match MODEL_WEIGHTS_SHA256."
         )
-
+ 
 def load_models():
     global _model, _mtcnn
     # keep_all=True detects every face in the frame instead of only the
@@ -70,7 +89,7 @@ def load_models():
     # select_largest=True still orders faces largest-first, so index 0 is
     # unchanged from the old keep_all=False behavior.
     _mtcnn = MTCNN(keep_all=True, device=DEVICE, post_process=False, image_size=224, margin=20)
-
+ 
     model = vit_small_patch16_224(pretrained=False, num_classes=2)
     if not os.path.exists(CHECKPOINT_PATH):
         print(f"[ViT-CORE] Warning: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")
@@ -103,43 +122,43 @@ def load_models():
             ckpt = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
             sd = ckpt.get("model") or ckpt.get("model_state_dict") or ckpt
         model.load_state_dict(sd)
-
+ 
     model.to(DEVICE)
     model.eval()
     if DEVICE.type == 'cuda':
         model.half()
-
+ 
     # Hook the QKV layer and manually compute the attention matrix
     def qkv_hook(module, input, output):
         try:
             B, N, C = output.shape
             num_heads = model.blocks[-1].attn.num_heads
             head_dim = (C // 3) // num_heads
-
+ 
             qkv = output.reshape(B, N, 3, num_heads, head_dim).permute(2, 0, 3, 1, 4)
             q, k, v = qkv.unbind(0)
-
+ 
             scale = head_dim ** -0.5
             attn = (q @ k.transpose(-2, -1)) * scale
             attn = attn.softmax(dim=-1)
-
+ 
             _attention_cache['last_attn'] = attn.detach().cpu().numpy()
         except Exception as e:
             print(f"[ViT-CORE] Heatmap generation error: {e}")
-
+ 
     try:
         model.blocks[-1].attn.qkv.register_forward_hook(qkv_hook)
     except Exception as e:
         print(f"[ViT-CORE] Could not hook QKV layer for heatmaps: {e}")
-
+ 
     _model = model
     print(f"[ViT-CORE] Models loaded on {DEVICE}")
-
+ 
 def get_models():
     if _model is None or _mtcnn is None:
         load_models()
     return _model, _mtcnn
-
+ 
 def get_status() -> dict:
     """Liveness/readiness details for /health — whether the model is
     actually usable, not just whether the process is up."""
@@ -149,7 +168,7 @@ def get_status() -> dict:
         "weights_path": CHECKPOINT_PATH,
         "weights_found": os.path.exists(CHECKPOINT_PATH),
     }
-
+ 
 def assess_face_quality(image: Image.Image) -> dict:
     """Blur (Laplacian variance) and brightness thresholds below are
     calibrated heuristics, not learned from data — see MODEL_CARD.md's
@@ -157,21 +176,21 @@ def assess_face_quality(image: Image.Image) -> dict:
     for quality-aware training."""
     cv_img = np.array(image)
     gray = cv2.cvtColor(cv_img, cv2.COLOR_RGB2GRAY)
-
+ 
     blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
     brightness = float(np.mean(gray))
-
+ 
     is_poor_lighting = brightness < 35 or brightness > 215
-
+ 
     if blur_score < 100.0 or is_poor_lighting:
         status = "Poor"
     elif blur_score < 350.0:
         status = "Fair"
     else:
         status = "High"
-
+ 
     return {"valid": status != "Poor", "status": status, "blur": round(blur_score, 1)}
-
+ 
 def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
     view1 = image_tensor
     view2 = F.hflip(image_tensor)
@@ -179,18 +198,18 @@ def get_tta_views(image_tensor: torch.Tensor) -> torch.Tensor:
     zoom = F.resize(zoom, [224, 224])
     view3 = zoom
     view4 = F.hflip(zoom)
-
+ 
     views = torch.stack([view1, view2, view3, view4])
     views = torch.stack([NORMALIZE(v.float() / 255.0) for v in views])
     return views
-
+ 
 def generate_explainability_visuals(image: Image.Image) -> dict:
     """Generates heatmap (JET), patch grid, and attention mask (INFERNO) in base64."""
     if 'last_attn' not in _attention_cache:
         return {"heatmap": "", "patches": "", "attention": ""}
-
+ 
     cv_img = cv2.cvtColor(np.array(image.resize((224, 224))), cv2.COLOR_RGB2BGR)
-
+ 
     # Patch grid overlay — shows the 16x16 tokenization boundaries the ViT
     # actually operates on.
     overlay = cv_img.copy()
@@ -202,7 +221,7 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     patch_img = cv2.addWeighted(overlay, 0.5, cv_img, 0.5, 0)
     _, buffer_patch = cv2.imencode('.jpg', patch_img)
     patches_b64 = base64.b64encode(buffer_patch).decode('utf-8')
-
+ 
     # Attention rollout: average the final block's CLS-token attention over
     # all heads to get one importance weight per patch.
     attn = _attention_cache['last_attn'][0]
@@ -227,33 +246,33 @@ def generate_explainability_visuals(image: Image.Image) -> dict:
     except Exception:
         # Final safety fallback
         attention_cmap = cv2.cvtColor(attention_inferno, cv2.COLOR_GRAY2BGR)
-
+ 
     # Blend the inferno map with a darkened version of the base image for spatial context
     dimmed_base = cv2.convertScaleAbs(cv_img, alpha=0.3, beta=0) # Drops brightness to 30%
     blended_attention = cv2.addWeighted(dimmed_base, 0.8, attention_cmap, 0.8, 0)
-
+ 
     _, buffer_attn = cv2.imencode('.jpg', blended_attention)
     attention_b64 = base64.b64encode(buffer_attn).decode('utf-8')
-
+ 
     # JET-colormap heatmap — the one surfaced through the API (see main.py).
     heatmap_jet = np.uint8(255 * attention_grid)
     heatmap_jet = cv2.applyColorMap(heatmap_jet, cv2.COLORMAP_JET)
     superimposed = cv2.addWeighted(cv_img, 0.6, heatmap_jet, 0.4, 0)
     _, buffer_heat = cv2.imencode('.jpg', superimposed)
     heatmap_b64 = base64.b64encode(buffer_heat).decode('utf-8')
-
+ 
     return {
         "heatmap": heatmap_b64,
         "patches": patches_b64,
         "attention": attention_b64
     }
-
+ 
 _EMPTY_VISUALS = {"heatmap": "", "patches": "", "attention": ""}
-
+ 
 @torch.inference_mode()
 def analyze_all_faces(image: Image.Image, generate_explainability: bool = False) -> list:
     """Detect and independently score every face in the image.
-
+ 
     Faces are returned largest-first (MTCNN's select_largest ordering), so
     index 0 is the "primary" subject a single-face caller should use. Each
     face gets its own MTCNN confidence gate, TTA batch, and ViT forward
@@ -265,41 +284,47 @@ def analyze_all_faces(image: Image.Image, generate_explainability: bool = False)
     ever using the primary face).
     """
     model, mtcnn = get_models()
-
+ 
     try:
         boxes, probs = mtcnn.detect(image)
     except Exception as e:
         print(f"[ViT-CORE] MTCNN detection error: {e}")
         return []
-
+ 
     if boxes is None or probs is None or len(probs) == 0:
         return []
-
+ 
     # Reject artwork/pareidolia per-face: only score faces MTCNN is highly
     # confident about, rather than gating the whole image on the single
     # best detection.
     valid_indices = [i for i, p in enumerate(probs) if p is not None and p >= 0.98]
     if not valid_indices:
-        print(f"[ViT-CORE] Face(s) rejected: low confidence (best={max(probs):.3f}). Likely OOD/Artwork.")
+        # probs can genuinely contain None entries (a documented
+        # facenet_pytorch MTCNN behavior) — max() over the raw list would
+        # crash on those instead of logging the actual "no confident face"
+        # case. Filter them out first, and default to 0 for the edge case
+        # where every entry is None.
+        valid_probs = [p for p in probs if p is not None]
+        print(f"[ViT-CORE] Face(s) rejected: low confidence (best={max(valid_probs, default=0):.3f}). Likely OOD/Artwork.")
         return []
-
+ 
     face_tensors = mtcnn(image)  # (n, 3, 224, 224), same order as boxes/probs
     if face_tensors is None:
         return []
-
+ 
     results = []
     for i in valid_indices:
         if i >= face_tensors.shape[0]:
             continue
         face_tensor = face_tensors[i]
-
+ 
         display_img = F.to_pil_image(face_tensor / 255.0)
         face_quality = assess_face_quality(display_img)
-
+ 
         batch = get_tta_views(face_tensor).to(DEVICE)
         if DEVICE.type == 'cuda':
             batch = batch.half()
-
+ 
         # Serialized: the QKV hook writes to the shared _attention_cache, so
         # the forward pass and the heatmap read of that cache must be atomic
         # across concurrently-running worker threads (and across faces).
@@ -308,15 +333,15 @@ def analyze_all_faces(image: Image.Image, generate_explainability: bool = False)
             avg_logits = torch.mean(out, dim=0, keepdim=True)
             prob = torch.softmax(avg_logits, dim=1)[0, 1].item()
             visuals = generate_explainability_visuals(display_img) if generate_explainability else _EMPTY_VISUALS
-
+ 
         results.append({
             "probability": float(prob),
             "quality": face_quality,
             "visuals": visuals,
         })
-
+ 
     return results
-
+ 
 def analyze_frame(image: Image.Image, generate_explainability=False):
     """Backward-compatible single-face view over analyze_all_faces: scores
     every face but returns only the primary (largest) one. This is what
@@ -326,6 +351,6 @@ def analyze_frame(image: Image.Image, generate_explainability=False):
     faces = analyze_all_faces(image, generate_explainability)
     if not faces:
         return None, False, {"valid": False, "status": "N/A", "blur": 0}, _EMPTY_VISUALS
-
+ 
     primary = faces[0]
     return primary["probability"], True, primary["quality"], primary["visuals"]
