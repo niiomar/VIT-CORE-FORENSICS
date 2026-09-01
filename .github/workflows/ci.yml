@@ -8,7 +8,7 @@ on:
 
 # Explicit minimal scope for the auto-issued GITHUB_TOKEN. Without this,
 # it defaults to broad repo permissions even though this workflow only
-# ever needs to read the checked-out code — nothing here writes commits,
+# ever needs to read the checked-out code nothing here writes commits,
 # comments, releases, or packages.
 permissions:
   contents: read
@@ -72,14 +72,14 @@ jobs:
         run: npm test
 
       - name: Dependency vulnerability scan (npm audit)
-        # Informational, same reasoning as pip-audit on the backend job —
+        # Informational, same reasoning as pip-audit on the backend job 
         # see that step's comment.
         continue-on-error: true
         run: npm audit --audit-level=high
 
   docker:
     # Building/running the image was previously only ever checked by
-    # reading the Dockerfile, never by actually running it — that let a
+    # reading the Dockerfile, never by actually running it that let a
     # broken base-image pin, a wrong COPY source path, and two mismatched
     # volume-mount paths ship unnoticed. This job builds and boots the real
     # image on every push so that class of bug fails CI instead of being
