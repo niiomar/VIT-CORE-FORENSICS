@@ -304,11 +304,19 @@ Analyze a single image or video file.
   "frames_analyzed": 1,
   "is_low_confidence": true,
   "explainability_maps": ["<base64 JPEG>"],
+  "explainability_visuals": [{"heatmap": "<base64 JPEG>", "patches": "<base64 JPEG>", "attention": "<base64 JPEG>"}],
   "filename": "evidence.jpg",
   "multiple_faces_detected": false,
   "file_sha256": "..."
 }
 ```
+
+`explainability_maps` is the flat, one-string-per-frame list the bundled
+frontend actually renders (`explainability_maps[0]`). `explainability_visuals`
+carries the same per-frame data unflattened — the full `{heatmap, patches,
+attention}` dict per frame — for external consumers that need the patch-grid
+or raw attention view addressable separately, not just the blended JET
+heatmap. Both are only populated when `explain=true`.
 
 `verdict`/`confidence`/`probability` always reflect the primary (largest)
 face. If a single-image upload contains more than one face, the response
