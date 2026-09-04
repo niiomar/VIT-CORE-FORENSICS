@@ -5,7 +5,7 @@
 [![CI](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml/badge.svg)](https://github.com/niiomar/VIT-CORE-FORENSICS/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
+[![Node 22+](https://img.shields.io/badge/node-22+-green.svg)](https://nodejs.org/)
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
@@ -165,7 +165,7 @@ ViT-CORE-FORENSICS/
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 18+
+- Node.js 22+
 - 8GB+ RAM (CUDA-enabled GPU recommended; CPU inference works but is slower)
 
 ### 1. Clone the repository
@@ -443,7 +443,7 @@ npm test
 
 ### CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU tests (inference pipeline + HTTP layer) with untrained weights, frontend unit tests, a frontend production build, and informational `pip-audit`/`npm audit` dependency scans.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: backend compile-check, CPU tests (inference pipeline + HTTP layer) with untrained weights, frontend unit tests, a frontend production build, a real Docker image build that boots the container and polls `/health` (catches base-image/path/volume-mount bugs that a Dockerfile read-through would miss), and informational `pip-audit`/`npm audit` dependency scans.
 
 ---
 
