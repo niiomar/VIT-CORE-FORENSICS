@@ -134,6 +134,14 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
 
     frame_data = []
     heatmaps = []
+    # Separate from `heatmaps` deliberately - explainability_maps must stay
+    # a flat list of base64 strings (frontend/app.js embeds it directly as
+    # `data:image/jpeg;base64,${explainability_maps[0]}`; see commit
+    # 68dc5d7, which fixed exactly this field being dicts by mistake and
+    # breaking that). veritas-nexus's proxy layer needs heatmap/patches/
+    # attention addressable separately per frame, which a flat string list
+    # can't represent - this carries that instead, additively.
+    explainability_visuals = []
     max_faces_in_a_frame = 0
     single_image_faces = None  # populated only when len(frames) == 1
 
@@ -158,10 +166,13 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
             "quality": primary["quality"],
         })
         # visuals is a dict of base64-encoded images
-        # ({"heatmap", "patches", "attention"}); the API only surfaces the
-        # blended JET heatmap, matching the documented response shape.
+        # ({"heatmap", "patches", "attention"}); explainability_maps only
+        # surfaces the blended JET heatmap, matching the documented
+        # response shape - explainability_visuals (below) carries the
+        # full dict for consumers that need heatmap/attention distinctly.
         if primary["visuals"].get("heatmap"):
             heatmaps.append(primary["visuals"]["heatmap"])
+            explainability_visuals.append(primary["visuals"])
 
         # A single-image upload has no cross-frame identity ambiguity, so
         # every detected face can be safely scored and reported on its own.
@@ -210,6 +221,7 @@ def _run_analysis_sync(filename: str, content: bytes, explain: bool) -> dict:
         "frames_analyzed": len(probs),
         "is_low_confidence": False if agg_prob is None else (0.4 < agg_prob < 0.6),
         "explainability_maps": heatmaps,
+        "explainability_visuals": explainability_visuals,
         "filename": filename,
         "multiple_faces_detected": max_faces_in_a_frame > 1,
     }
